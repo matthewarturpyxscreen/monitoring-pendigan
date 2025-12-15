@@ -1,6 +1,4 @@
 import streamlit as st
-st.cache_data.clear()
-
 import pandas as pd
 import re
 import requests
@@ -15,7 +13,7 @@ st.set_page_config(
     page_title="Dashboard Monitoring Pekerjaan",
     layout="wide",
     initial_sidebar_state="expanded",
-    menu_items={'About': "Dashboard Monitoring Pekerjaan v3.1"}
+    menu_items={'About': "Dashboard Monitoring Pekerjaan v3.2"}
 )
 
 REFRESH_INTERVAL = 300  # 5 menit
@@ -64,26 +62,44 @@ def extract_sheet_id(url):
     m = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", url)
     return m.group(1) if m else None
 
-def get_sheet_names(sheet_id):
-    """Ambil SEMUA nama sheet dari Google Spreadsheet"""
+def test_sheet_access(sheet_id):
+    """Test apakah sheet bisa diakses"""
+    try:
+        test_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
+        response = requests.head(test_url, timeout=5, allow_redirects=True)
+        return response.status_code == 200
+    except:
+        return False
+
+def get_sheet_names_method1(sheet_id):
+    """Method 1: Parse dari HTML page"""
     try:
         url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit"
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        response = requests.get(url, headers=headers, timeout=10)
         
-        # Cari semua sheet names dalam HTML
-        pattern = r'"sheetId":(\d+),"title":"([^"]+)"'
-        matches = re.findall(pattern, response.text)
+        if response.status_code != 200:
+            return []
         
-        # Return list of sheet names, sorted by sheet ID
-        sheet_names = [match[1] for match in matches]
+        # Multiple patterns untuk berbagai format
+        patterns = [
+            r'"sheetId":(\d+),"title":"([^"]+)"',
+            r'"title":"([^"]+)","index":\d+',
+            r'\["([^"]+)",\d+,\d+\]'
+        ]
         
-        # Fallback: coba pattern lain
-        if not sheet_names:
-            pattern2 = r'"title":"([^"]+)","index":\d+'
-            sheet_names = re.findall(pattern2, response.text)
+        sheet_names = []
+        for pattern in patterns:
+            matches = re.findall(pattern, response.text)
+            if matches:
+                if isinstance(matches[0], tuple):
+                    sheet_names.extend([m[-1] for m in matches])
+                else:
+                    sheet_names.extend(matches)
         
-        # Remove duplicates sambil maintain order
+        # Remove duplicates
         seen = set()
         unique_names = []
         for name in sheet_names:
@@ -93,38 +109,97 @@ def get_sheet_names(sheet_id):
         
         return unique_names
     except Exception as e:
-        st.error(f"Error mengambil nama sheet: {str(e)}")
         return []
 
-def csv_by_name(sheet_id, sheet_name):
+def get_sheet_names_method2(sheet_id):
+    """Method 2: Try default sheet first, then gid-based discovery"""
+    sheets_found = []
+    
+    # Try sheet without name (default/first sheet)
+    try:
+        test_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
+        df = pd.read_csv(test_url)
+        if not df.empty:
+            sheets_found.append("Sheet1")  # Default name
+    except:
+        pass
+    
+    # Try common gid values
+    common_gids = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    for gid in common_gids:
+        try:
+            url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
+            df = pd.read_csv(url)
+            if not df.empty:
+                sheets_found.append(f"Sheet_gid_{gid}")
+        except:
+            continue
+    
+    return sheets_found
+
+def csv_url_by_name(sheet_id, sheet_name):
     """Generate CSV URL untuk sheet tertentu"""
     encoded_name = quote(sheet_name)
     return f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={encoded_name}"
 
+def csv_url_by_gid(sheet_id, gid):
+    """Generate CSV URL menggunakan gid"""
+    return f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
+
 @st.cache_data(ttl=REFRESH_INTERVAL)
 def load_all_sheets(sheet_id):
     """Load semua sheet dari Google Spreadsheet"""
-    dfs = []
-    sheet_names = get_sheet_names(sheet_id)
-
+    
+    # Test access first
+    st.info("🔍 Mengecek akses spreadsheet...")
+    if not test_sheet_access(sheet_id):
+        return None, "❌ Spreadsheet tidak bisa diakses. Pastikan:\n1. Link sharing diset ke 'Anyone with the link can view'\n2. URL yang Anda masukkan benar"
+    
+    st.success("✅ Spreadsheet bisa diakses!")
+    
+    # Try to get sheet names
+    st.info("📋 Mencari nama-nama sheet...")
+    sheet_names = get_sheet_names_method1(sheet_id)
+    
     if not sheet_names:
-        return None, "❌ Tidak ada sheet yang ditemukan. Pastikan spreadsheet bisa diakses publik."
+        st.warning("⚠️ Tidak bisa mendeteksi nama sheet, mencoba metode alternatif...")
+        sheet_names = get_sheet_names_method2(sheet_id)
+    
+    if not sheet_names:
+        return None, "❌ Tidak ada sheet yang ditemukan. Coba:\n1. Pastikan spreadsheet tidak kosong\n2. Periksa permission (Anyone with link = Viewer)\n3. Copy paste ulang URL dari browser"
 
+    st.info(f"📑 Ditemukan {len(sheet_names)} sheet: {', '.join(sheet_names)}")
+    
+    dfs = []
     progress_bar = st.progress(0)
     status_text = st.empty()
     
     for idx, name in enumerate(sheet_names):
         try:
-            status_text.text(f"📥 Memuat sheet: {name}")
-            df = pd.read_csv(csv_by_name(sheet_id, name))
+            status_text.text(f"📥 Memuat sheet {idx+1}/{len(sheet_names)}: {name}")
+            
+            # Try reading by name first
+            url = csv_url_by_name(sheet_id, name)
+            try:
+                df = pd.read_csv(url)
+            except:
+                # If name fails, try by gid if it's gid-based name
+                if "gid_" in name:
+                    gid = name.split("gid_")[-1]
+                    url = csv_url_by_gid(sheet_id, gid)
+                    df = pd.read_csv(url)
+                else:
+                    raise
             
             if not df.empty:
                 df["__sheet"] = name
                 dfs.append(df)
-                st.success(f"✅ Sheet '{name}' berhasil dimuat ({len(df)} baris)")
+                st.success(f"✅ '{name}': {len(df)} baris")
+            else:
+                st.warning(f"⚠️ '{name}': kosong")
             
             progress_bar.progress((idx + 1) / len(sheet_names))
-            time.sleep(0.1)  # Prevent rate limiting
+            time.sleep(0.2)  # Prevent rate limiting
             
         except Exception as e:
             st.warning(f"⚠️ Gagal memuat sheet '{name}': {str(e)}")
@@ -134,10 +209,10 @@ def load_all_sheets(sheet_id):
     status_text.empty()
 
     if not dfs:
-        return None, "❌ Tidak ada sheet yang bisa dibaca. Periksa izin akses spreadsheet."
+        return None, "❌ Semua sheet gagal dimuat. Kemungkinan:\n1. Format data tidak sesuai (harus CSV-compatible)\n2. Sheet kosong semua\n3. Ada proteksi pada cell/sheet"
 
     combined_df = pd.concat(dfs, ignore_index=True)
-    st.success(f"🎉 Total {len(dfs)} sheet berhasil dimuat dengan {len(combined_df)} baris data!")
+    st.success(f"🎉 Berhasil! Total {len(dfs)} sheet dengan {len(combined_df)} baris data!")
     
     return combined_df, None
 
@@ -193,13 +268,26 @@ with st.sidebar:
     sheet_url = st.text_input(
         "🔗 Google Spreadsheet URL",
         value="https://docs.google.com/spreadsheets/d/1eX5CeXR4xzYPPHikbfdm2JUBpL5HQ3LC9cAA0X4m-QQ/edit?usp=sharing",
-        help="Pastikan spreadsheet dapat diakses oleh siapa saja dengan link"
+        help="Paste URL lengkap dari spreadsheet Anda"
     )
     
-    load_btn = st.button("📥 Muat Ulang Semua Sheet", use_container_width=True)
+    load_btn = st.button("📥 Muat Ulang Data", use_container_width=True, type="primary")
     
     st.markdown("---")
-    st.info("💡 **Tips:**\n- Spreadsheet harus diset 'Anyone with the link can view'\n- Refresh otomatis setiap 5 menit")
+    
+    with st.expander("📖 Cara Setting Spreadsheet"):
+        st.markdown("""
+        **Langkah-langkah:**
+        1. Buka Google Spreadsheet Anda
+        2. Klik tombol **Share** (pojok kanan atas)
+        3. Ubah ke **"Anyone with the link"**
+        4. Set role ke **"Viewer"**
+        5. Klik **Copy link**
+        6. Paste link di kolom URL di atas
+        7. Klik **Muat Ulang Data**
+        """)
+    
+    st.info("💡 Auto refresh setiap 5 menit")
 
 # ======================================================
 # MAIN
@@ -210,12 +298,14 @@ if not sheet_url:
 
 sheet_id = extract_sheet_id(sheet_url)
 if not sheet_id:
-    st.error("❌ URL Spreadsheet tidak valid. Format: https://docs.google.com/spreadsheets/d/[SHEET_ID]/edit")
+    st.error("❌ URL tidak valid!\n\nFormat yang benar:\n`https://docs.google.com/spreadsheets/d/[SHEET_ID]/edit`")
     st.stop()
+
+st.info(f"🔑 Sheet ID terdeteksi: `{sheet_id}`")
 
 # Load data
 if load_btn or "df" not in st.session_state:
-    with st.spinner("⏳ Memuat data dari semua sheet..."):
+    with st.spinner("⏳ Memproses data..."):
         df, err = load_all_sheets(sheet_id)
         if err:
             st.error(err)
@@ -243,7 +333,9 @@ required_columns = [
 missing = [c for c in required_columns if c not in df.columns]
 if missing:
     st.error(f"❌ Kolom tidak ditemukan: {', '.join(missing)}")
-    st.info(f"Kolom yang tersedia: {', '.join(df.columns.tolist())}")
+    with st.expander("📋 Lihat semua kolom yang tersedia"):
+        st.write(df.columns.tolist())
+    st.info("💡 Pastikan nama kolom di spreadsheet sesuai dengan yang dibutuhkan")
     st.stop()
 
 # ======================================================
@@ -387,6 +479,6 @@ with st.expander("📊 Lihat Breakdown Per Sheet"):
 st.markdown("---")
 st.markdown("""
 <div class='dashboard-footer'>
-    <p>🚀 Dashboard Monitoring v3.1 • Multi Sheet • Auto Refresh • Built with Streamlit</p>
+    <p>🚀 Dashboard Monitoring v3.2 • Multi Sheet • Auto Refresh • Built with Streamlit</p>
 </div>
 """, unsafe_allow_html=True)
