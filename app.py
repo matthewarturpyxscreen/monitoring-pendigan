@@ -102,29 +102,21 @@ def normalize_status(val):
     if pd.isna(val) or val == "":
         return "Belum Dikerjakan"
     
-    # Convert to string dan uppercase
     val = str(val).upper().strip()
-    
-    # Remove special characters dan normalize whitespace
     val = re.sub(r'[\u00A0\u200B\u200C\u200D\t\n\r]', ' ', val)
     val = re.sub(r'\s+', ' ', val)
     
-    # Prioritas pengecekan dari yang paling spesifik
-    # Cek "DATA BERMASALAH" atau "BERMASALAH" DULU sebelum "SELESAI"
-    # Karena bisa ada text "DATA BERMASALAH" yang mengandung kata lain
-    
-    if "BERMASALAH" in val or "MASALAH" in val or "ERROR" in val or "GAGAL" in val:
-        return "Data Bermasalah"
-    elif "SELESAI" in val or "COMPLETE" in val or "SUKSES" in val:
+    if "SELESAI" in val or "COMPLETE" in val:
         return "Selesai"
-    elif "KURANG BAPP" in val or "BAPP" in val or "KURANG" in val:
+    elif "KURANG BAPP" in val or "BAPP" in val:
         return "Kurang BAPP"
-    elif "PROSES" in val or "PENGERJAAN" in val or "INSTALASI" in val or "DIKERJAKAN" in val:
+    elif "BERMASALAH" in val or "MASALAH" in val or "ERROR" in val:
+        return "Data Bermasalah"
+    elif "PROSES" in val or "PENGERJAAN" in val or "INSTALASI" in val:
         return "Sedang Diproses"
     elif "BELUM" in val:
         return "Belum Dikerjakan"
     else:
-        # Default: kalau ada isinya tapi tidak match kategori, anggap sedang diproses
         return "Sedang Diproses"
 
 def get_status_priority(status):
@@ -364,20 +356,40 @@ if not url_list:
     st.info("👆 Masukkan minimal 1 URL di sidebar")
     st.stop()
 
+# Show URLs yang akan diload
+with st.expander(f"📋 URL yang akan diload ({len(url_list)} sheet)"):
+    for i, url in enumerate(url_list, 1):
+        sheet_id, gid = extract_sheet_id_and_gid(url)
+        if sheet_id:
+            st.success(f"{i}. Sheet ID: `{sheet_id}` | GID: `{gid}`")
+        else:
+            st.error(f"{i}. ❌ URL tidak valid: {url[:50]}...")
+
 # Load data
 if load_btn or "df" not in st.session_state:
     with st.spinner("⏳ Memuat data dari semua sheet..."):
         df, load_results, dedup_info = load_multiple_sheets(url_list)
         
+        # Show load results
+        st.markdown("### 📊 Hasil Loading")
+        result_df = pd.DataFrame(load_results)
+        st.dataframe(result_df, use_container_width=True, hide_index=True)
+        
         if df is None:
-            st.error("❌ Gagal memuat data. Periksa URL dan permission spreadsheet!")
+            st.error("❌ Semua sheet gagal dimuat. Periksa URL dan permission!")
             st.stop()
         
-        # Show only summary info
-        if dedup_info and dedup_info['removed'] > 0:
-            st.success(f"✅ Data berhasil dimuat! {dedup_info['removed']:,} duplikat dihapus otomatis.")
-        else:
+        # Show dedup info
+        if dedup_info:
             st.success(f"✅ Data berhasil dimuat!")
+            
+            col_d1, col_d2, col_d3 = st.columns(3)
+            col_d1.metric("📥 Data Awal", f"{dedup_info['before']:,}")
+            col_d2.metric("🗑️ Duplikat Dihapus", f"{dedup_info['removed']:,}")
+            col_d3.metric("✅ Data Final", f"{dedup_info['after']:,}")
+            
+            if dedup_info['removed'] > 0:
+                st.info(f"💡 Ditemukan {dedup_info['duplicates_found']:,} data duplikat. Sistem otomatis pilih yang sudah ada status.")
         
         st.session_state["df"] = df
         st.session_state["load_results"] = load_results
@@ -394,14 +406,13 @@ dedup_info = st.session_state.get("dedup_info", {})
 # ======================================================
 # INFO BOXES
 # ======================================================
+st.markdown("---")
 col_info1, col_info2, col_info3, col_info4 = st.columns(4)
 
 col_info1.metric("📋 Total Data", f"{len(df):,}")
 col_info2.metric("📑 Sheet Loaded", len(url_list))
-if dedup_info and dedup_info.get('removed', 0) > 0:
+if dedup_info:
     col_info3.metric("🗑️ Duplikat Removed", f"{dedup_info.get('removed', 0):,}")
-else:
-    col_info3.metric("🗑️ Duplikat Removed", "0")
 if "last_load" in st.session_state:
     col_info4.metric("🕐 Last Load", st.session_state["last_load"].strftime("%H:%M:%S"))
 
@@ -435,23 +446,6 @@ for col in optional_columns:
 # ======================================================
 if "Status_Category" not in df.columns:
     df["Status_Category"] = df["Status_Text"].apply(normalize_status)
-
-# Debug Panel - Tampilkan sample untuk validasi
-with st.expander("🔍 **Debug: Cek Status Text dari Spreadsheet**"):
-    st.markdown("**Sample 20 data pertama untuk validasi:**")
-    
-    debug_cols = ["__source", "Trans. ID", "Nama", "Status_Text", "Status_Category"]
-    debug_df = df[debug_cols].head(20)
-    
-    st.dataframe(debug_df, use_container_width=True)
-    
-    st.markdown("---")
-    st.markdown("**Unique Status Text yang terdeteksi:**")
-    unique_status = df["Status_Text"].value_counts().reset_index()
-    unique_status.columns = ["Status Text", "Jumlah"]
-    st.dataframe(unique_status, use_container_width=True)
-    
-    st.info("💡 Cek apakah 'DATA BERMASALAH' muncul di list Status Text. Jika tidak muncul, berarti Apps Script belum jalan atau kolom Status_Text belum terupdate.")
 
 # ======================================================
 # METRICS
