@@ -1,6 +1,5 @@
 import streamlit as st
 st.cache_data.clear()
-
 import pandas as pd
 import re
 from datetime import datetime
@@ -20,11 +19,7 @@ REFRESH_INTERVAL = 300
 # ======================================================
 # CSS (TIDAK DIUBAH)
 # ======================================================
-st.markdown("""
-<style>
-/* CSS KAMU — TIDAK DIUBAH */
-</style>
-""", unsafe_allow_html=True)
+st.markdown("""<style>/* CSS KAMU — TIDAK DIUBAH */</style>""", unsafe_allow_html=True)
 
 st.markdown(
     f"""<meta http-equiv="refresh" content="{REFRESH_INTERVAL}">""",
@@ -44,29 +39,16 @@ def load_data(sheet_id: str, gid: str = "0"):
     except Exception as e:
         return None, str(e)
 
-# ======================================================
-# STATUS NORMALIZER (ANTI GOOGLE SHEETS BUG)
-# ======================================================
 def normalize_status(val):
-    if pd.isna(val):
-        return "Belum Dikerjakan"
-
-    val = str(val).upper()
-
-    # hapus karakter siluman
-    val = re.sub(r'[\u00A0\u200B\u200C\u200D\t\n\r]', ' ', val)
-    val = re.sub(r'\s+', ' ', val).strip()
-
-    if "DATA BERMASALAH" in val:
-        return "Data Bermasalah"
-    elif "KURANG BAPP" in val:
-        return "Kurang BAPP"
-    elif "PROSES" in val or "INSTALASI" in val:
-        return "Sedang Diproses"
-    elif "SELESAI" in val:
-        return "Selesai"
-    else:
-        return "Belum Dikerjakan"
+    val = str(val).upper().strip()
+    mapping = {
+        "BELUM DIKERJAKAN": "Belum Dikerjakan",
+        "PROSES PENGERJAAN": "Sedang Diproses",
+        "KURANG BAPP": "Kurang BAPP",
+        "SELESAI DIKERJAKAN": "Selesai",
+        "DATA BERMASALAH": "Data Bermasalah"
+    }
+    return mapping.get(val, "Belum Dikerjakan")
 
 def get_status_color(status):
     return {
@@ -98,7 +80,6 @@ with st.sidebar:
         m = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", sheet_url)
         if m:
             sheet_id = m.group(1)
-
         g = re.search(r"[#&]gid=([0-9]+)", sheet_url)
         if g:
             gid = g.group(1)
@@ -136,37 +117,29 @@ if missing:
     st.stop()
 
 # ======================================================
-# PROCESS DATA (FIX UTAMA)
+# PROCESS DATA (STATUS DARI SHEET)
 # ======================================================
-df["Status_Text"] = df["Status_Text"].apply(normalize_status)
-df["Status_Category"] = df["Status_Text"]
+df["Status_Category"] = df["Status_Text"].apply(normalize_status)
 
 # ======================================================
 # METRICS
 # ======================================================
+total = len(df)
 st.markdown('<div class="section-header"><h3>📈 Ringkasan Status</h3></div>', unsafe_allow_html=True)
 
 c1, c2, c3, c4, c5 = st.columns(5)
-
-c1.metric("BELUM", (df.Status_Category == "Belum Dikerjakan").sum())
-c2.metric("PROSES", (df.Status_Category == "Sedang Diproses").sum())
-c3.metric("KURANG BAPP", (df.Status_Category == "Kurang BAPP").sum())
-c4.metric("SELESAI", (df.Status_Category == "Selesai").sum())
-c5.metric("BERMASALAH", (df.Status_Category == "Data Bermasalah").sum())
+c1.metric("BELUM", (df.Status_Category=="Belum Dikerjakan").sum())
+c2.metric("PROSES", (df.Status_Category=="Sedang Diproses").sum())
+c3.metric("KURANG BAPP", (df.Status_Category=="Kurang BAPP").sum())
+c4.metric("SELESAI", (df.Status_Category=="Selesai").sum())
+c5.metric("BERMASALAH", (df.Status_Category=="Data Bermasalah").sum())
 
 # ======================================================
 # FILTER
 # ======================================================
 status_filter = st.selectbox(
     "Status",
-    [
-        "Semua",
-        "Belum Dikerjakan",
-        "Sedang Diproses",
-        "Kurang BAPP",
-        "Selesai",
-        "Data Bermasalah"
-    ]
+    ["Semua","Belum Dikerjakan","Sedang Diproses","Kurang BAPP","Selesai","Data Bermasalah"]
 )
 
 filtered_df = df.copy()
@@ -177,12 +150,11 @@ if status_filter != "Semua":
 # TABLE
 # ======================================================
 def style_status(val):
-    return f"background-color:{get_status_color(val)};color:white;font-weight:600"
+    cat = normalize_status(val)
+    return f"background-color:{get_status_color(cat)};color:white;font-weight:600"
 
 st.dataframe(
-    filtered_df[required_columns]
-    .style
-    .applymap(style_status, subset=["Status_Text"]),
+    filtered_df[required_columns].style.applymap(style_status, subset=["Status_Text"]),
     use_container_width=True,
     height=550
 )
