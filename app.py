@@ -4,9 +4,7 @@ st.cache_data.clear()
 import pandas as pd
 import re
 import requests
-import time
 from datetime import datetime
-from urllib.parse import quote
 
 # ======================================================
 # CONFIG
@@ -15,7 +13,7 @@ st.set_page_config(
     page_title="Dashboard Monitoring Pekerjaan",
     layout="wide",
     initial_sidebar_state="expanded",
-    menu_items={'About': "Dashboard Monitoring Pekerjaan v4.0"}
+    menu_items={'About': "Dashboard Monitoring v5.0 - GID Multi Input"}
 )
 
 REFRESH_INTERVAL = 300  # 5 menit
@@ -53,15 +51,12 @@ st.markdown("""
     margin-top: 2rem;
     color: #666;
 }
-.sheet-badge {
-    display: inline-block;
-    padding: 0.25rem 0.75rem;
-    background: #e0e7ff;
-    color: #4338ca;
-    border-radius: 12px;
-    font-size: 0.875rem;
-    font-weight: 600;
-    margin: 0.25rem;
+.url-input-box {
+    background: #f0f9ff;
+    padding: 1rem;
+    border-radius: 8px;
+    border-left: 4px solid #3b82f6;
+    margin: 0.5rem 0;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -69,154 +64,117 @@ st.markdown("""
 # ======================================================
 # UTILITIES
 # ======================================================
-def extract_sheet_id(url):
-    """Extract Sheet ID dari URL Google Sheets"""
-    m = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", url)
-    return m.group(1) if m else None
+def extract_sheet_id_and_gid(url):
+    """Extract Sheet ID dan GID dari URL"""
+    # Extract sheet ID
+    sheet_match = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", url)
+    if not sheet_match:
+        return None, None
+    
+    sheet_id = sheet_match.group(1)
+    
+    # Extract GID (jika ada)
+    gid_match = re.search(r"[#&]gid=(\d+)", url)
+    gid = gid_match.group(1) if gid_match else "0"
+    
+    return sheet_id, gid
 
-def get_all_sheet_names_from_tabs(sheet_id):
-    """Ambil semua nama sheet dari tabs di bagian bawah spreadsheet"""
+def load_sheet_by_gid(sheet_id, gid, sheet_label="Sheet"):
+    """Load sheet berdasarkan GID"""
     try:
-        url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit"
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-        response = requests.get(url, headers=headers, timeout=15)
-        
-        if response.status_code != 200:
-            return []
-        
-        html = response.text
-        
-        # Pattern untuk menangkap nama sheet dari struktur JSON Google Sheets
-        # Format: "sheetId":xxx,"title":"NAMA_SHEET"
-        pattern = r'"sheetId":\d+,"title":"([^"]+)"'
-        matches = re.findall(pattern, html)
-        
-        if not matches:
-            # Coba pattern alternatif
-            pattern2 = r'"title":"([^"]+?)","index":\d+'
-            matches = re.findall(pattern2, html)
-        
-        # Filter dan deduplikasi
-        seen = set()
-        sheet_names = []
-        for name in matches:
-            # Skip sheet yang kemungkinan sistem atau hidden
-            if name.startswith('_') or name.startswith('Copy of'):
-                continue
-            # Decode unicode jika perlu
-            if name not in seen:
-                seen.add(name)
-                sheet_names.append(name)
-        
-        return sheet_names
-        
-    except Exception as e:
-        st.error(f"Error parsing sheet names: {str(e)}")
-        return []
-
-def load_sheet_by_name(sheet_id, sheet_name):
-    """Load satu sheet berdasarkan nama"""
-    try:
-        encoded_name = quote(sheet_name)
-        url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={encoded_name}"
+        url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
         df = pd.read_csv(url)
-        return df
+        
+        if df.empty:
+            raise Exception("Sheet kosong")
+        
+        # Tambah identifier
+        df["__source"] = sheet_label
+        df["__gid"] = gid
+        
+        return df, None
     except Exception as e:
-        raise Exception(f"Gagal load sheet '{sheet_name}': {str(e)}")
+        return None, str(e)
 
-@st.cache_data(ttl=REFRESH_INTERVAL, show_spinner=False)
-def load_all_sheets(sheet_id):
-    """Load semua sheet dari Google Spreadsheet"""
-    
-    # Cek akses
-    try:
-        test_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
-        test_response = requests.head(test_url, timeout=5, allow_redirects=True)
-        if test_response.status_code != 200:
-            return None, "❌ Spreadsheet tidak bisa diakses.\n\n**Solusi:**\n1. Buka spreadsheet\n2. Klik **Share** → **Anyone with the link** → **Viewer**\n3. Copy URL dan paste ulang"
-    except:
-        return None, "❌ Tidak bisa koneksi ke Google Sheets. Cek koneksi internet Anda."
-    
-    # Ambil nama-nama sheet
-    sheet_names = get_all_sheet_names_from_tabs(sheet_id)
-    
-    if not sheet_names:
-        return None, "❌ Tidak ada sheet yang terdeteksi.\n\n**Kemungkinan:**\n1. Spreadsheet kosong\n2. Nama sheet mengandung karakter khusus\n3. Permission belum diset dengan benar"
-    
-    # Load setiap sheet
-    dfs = []
-    failed_sheets = []
-    
-    for idx, sheet_name in enumerate(sheet_names):
-        try:
-            df = load_sheet_by_name(sheet_id, sheet_name)
-            
-            if df.empty:
-                failed_sheets.append(f"{sheet_name} (kosong)")
-                continue
-            
-            # Tambahkan kolom identifier sheet
-            df["__sheet_name"] = sheet_name
-            dfs.append(df)
-            
-        except Exception as e:
-            failed_sheets.append(f"{sheet_name} ({str(e)[:30]}...)")
-            continue
-    
-    if not dfs:
-        error_msg = "❌ Semua sheet gagal dimuat."
-        if failed_sheets:
-            error_msg += f"\n\n**Sheet yang gagal:**\n" + "\n".join([f"- {s}" for s in failed_sheets])
-        return None, error_msg
-    
-    # Gabungkan semua dataframe
-    combined_df = pd.concat(dfs, ignore_index=True)
-    
-    return combined_df, {
-        "total_sheets": len(sheet_names),
-        "loaded_sheets": len(dfs),
-        "failed_sheets": failed_sheets,
-        "total_rows": len(combined_df)
-    }
-
-# ======================================================
-# STATUS NORMALIZER - DISESUAIKAN DENGAN APPS SCRIPT
-# ======================================================
 def normalize_status(val):
-    """Normalisasi status sesuai output Apps Script"""
+    """Normalisasi status sesuai Apps Script"""
     if pd.isna(val) or val == "":
         return "Belum Dikerjakan"
     
     val = str(val).upper().strip()
-    
-    # Normalize whitespace dan special chars
     val = re.sub(r'[\u00A0\u200B\u200C\u200D\t\n\r]', ' ', val)
     val = re.sub(r'\s+', ' ', val)
     
-    # Mapping sesuai Apps Script
-    if "SELESAI" in val or "COMPLETE" in val or "DONE" in val:
+    if "SELESAI" in val or "COMPLETE" in val:
         return "Selesai"
     elif "KURANG BAPP" in val or "BAPP" in val:
         return "Kurang BAPP"
     elif "BERMASALAH" in val or "MASALAH" in val or "ERROR" in val:
         return "Data Bermasalah"
-    elif "PROSES" in val or "PENGERJAAN" in val or "DIKERJAKAN" in val:
+    elif "PROSES" in val or "PENGERJAAN" in val or "INSTALASI" in val:
         return "Sedang Diproses"
     elif "BELUM" in val:
         return "Belum Dikerjakan"
     else:
-        return "Sedang Diproses"  # Default untuk status lainnya
+        return "Sedang Diproses"
+
+def get_status_priority(status):
+    """Priority untuk deduplication - semakin kecil semakin prioritas"""
+    priority_map = {
+        "Selesai": 1,
+        "Sedang Diproses": 2,
+        "Kurang BAPP": 3,
+        "Data Bermasalah": 4,
+        "Belum Dikerjakan": 5
+    }
+    return priority_map.get(status, 99)
+
+def deduplicate_data(df):
+    """
+    Deduplikasi berdasarkan Trans. ID
+    Prioritas: Ambil data yang sudah ada status (bukan Belum Dikerjakan)
+    """
+    if "Trans. ID" not in df.columns:
+        st.warning("⚠️ Kolom 'Trans. ID' tidak ditemukan, skip deduplikasi")
+        return df, {}
+    
+    # Normalize status
+    df["Status_Category"] = df["Status_Text"].apply(normalize_status)
+    df["__priority"] = df["Status_Category"].apply(get_status_priority)
+    
+    # Count duplicates before
+    before_count = len(df)
+    duplicate_count = df.duplicated(subset=["Trans. ID"], keep=False).sum()
+    
+    # Sort by priority (ascending) - yang prioritas tinggi di atas
+    df_sorted = df.sort_values(by=["Trans. ID", "__priority"])
+    
+    # Keep first (yang prioritas paling tinggi)
+    df_dedup = df_sorted.drop_duplicates(subset=["Trans. ID"], keep="first")
+    
+    # Remove helper column
+    df_dedup = df_dedup.drop(columns=["__priority"])
+    
+    after_count = len(df_dedup)
+    removed_count = before_count - after_count
+    
+    dedup_info = {
+        "before": before_count,
+        "after": after_count,
+        "removed": removed_count,
+        "duplicates_found": duplicate_count
+    }
+    
+    return df_dedup, dedup_info
 
 def get_status_color(status):
     """Warna untuk setiap status"""
     colors = {
-        "Belum Dikerjakan": "#94a3b8",      # Abu-abu
-        "Sedang Diproses": "#f59e0b",       # Orange/Kuning
-        "Kurang BAPP": "#3b82f6",           # Biru
-        "Selesai": "#10b981",               # Hijau
-        "Data Bermasalah": "#ef4444"        # Merah
+        "Belum Dikerjakan": "#94a3b8",
+        "Sedang Diproses": "#f59e0b",
+        "Kurang BAPP": "#3b82f6",
+        "Selesai": "#10b981",
+        "Data Bermasalah": "#ef4444"
     }
     return colors.get(status, "#94a3b8")
 
@@ -231,31 +189,88 @@ def get_status_emoji(status):
     }
     return emojis.get(status, "❓")
 
+@st.cache_data(ttl=REFRESH_INTERVAL, show_spinner=False)
+def load_multiple_sheets(url_list):
+    """Load multiple sheets dari list URL"""
+    all_dfs = []
+    load_results = []
+    
+    for idx, url in enumerate(url_list):
+        if not url.strip():
+            continue
+        
+        sheet_id, gid = extract_sheet_id_and_gid(url.strip())
+        
+        if not sheet_id:
+            load_results.append({
+                "url": url[:50] + "...",
+                "status": "❌ URL tidak valid",
+                "rows": 0
+            })
+            continue
+        
+        sheet_label = f"Sheet-{idx+1} (GID:{gid})"
+        df, error = load_sheet_by_gid(sheet_id, gid, sheet_label)
+        
+        if error:
+            load_results.append({
+                "url": url[:50] + "...",
+                "status": f"❌ Error: {error}",
+                "rows": 0
+            })
+        else:
+            all_dfs.append(df)
+            load_results.append({
+                "url": url[:50] + "...",
+                "status": "✅ Berhasil",
+                "rows": len(df)
+            })
+    
+    if not all_dfs:
+        return None, load_results, None
+    
+    # Gabungkan semua data
+    combined_df = pd.concat(all_dfs, ignore_index=True)
+    
+    # Deduplikasi
+    deduped_df, dedup_info = deduplicate_data(combined_df)
+    
+    return deduped_df, load_results, dedup_info
+
 # ======================================================
 # HEADER
 # ======================================================
 st.markdown(f"""
 <div class='dashboard-header'>
     <h1>📊 Dashboard Monitoring Pekerjaan</h1>
-    <p>Realtime Sync Active • Last Update: {datetime.now().strftime('%d %B %Y, %H:%M:%S WIB')}</p>
+    <p>Multi-Sheet GID Support • Smart Deduplication • Last Update: {datetime.now().strftime('%d %B %Y, %H:%M:%S WIB')}</p>
 </div>
 """, unsafe_allow_html=True)
 
 # ======================================================
-# SIDEBAR
+# SIDEBAR - MULTI URL INPUT
 # ======================================================
 with st.sidebar:
-    st.title("⚙️ Pengaturan")
+    st.title("⚙️ Input Data Source")
     
-    sheet_url = st.text_input(
-        "🔗 Google Spreadsheet URL",
-        value="https://docs.google.com/spreadsheets/d/1eX5CeXR4xzYPPHikbfdm2JUBpL5HQ3LC9cAA0X4m-QQ/edit?usp=sharing",
-        help="Paste URL lengkap dari spreadsheet Anda"
+    st.markdown("### 🔗 Masukkan URL Sheet (GID)")
+    st.caption("Bisa input lebih dari 1 URL. Satu URL per baris.")
+    
+    # Text area untuk multiple URLs
+    default_urls = """https://docs.google.com/spreadsheets/d/1eX5CeXR4xzYPPHikbfdm2JUBpL5HQ3LC9cAA0X4m-QQ/edit#gid=0"""
+    
+    url_input = st.text_area(
+        "URL Spreadsheet dengan GID",
+        value=default_urls,
+        height=150,
+        help="Format: https://docs.google.com/spreadsheets/d/[SHEET_ID]/edit#gid=[GID]\n\nContoh:\n- gid=0 untuk sheet pertama\n- gid=123456 untuk sheet lain"
     )
+    
+    st.markdown("---")
     
     col1, col2 = st.columns(2)
     with col1:
-        load_btn = st.button("🔄 Refresh", use_container_width=True, type="primary")
+        load_btn = st.button("🔄 Load Data", use_container_width=True, type="primary")
     with col2:
         clear_btn = st.button("🗑️ Clear Cache", use_container_width=True)
     
@@ -265,125 +280,148 @@ with st.sidebar:
     
     st.markdown("---")
     
-    with st.expander("🔧 Setup Apps Script"):
+    with st.expander("📖 Cara Pakai"):
         st.markdown("""
-        **Script sudah terpasang?** ✅
+        **1. Ambil URL dengan GID:**
+        - Buka Google Sheets
+        - Klik tab sheet yang ingin diambil
+        - Copy URL dari browser (sudah ada #gid=xxx)
+        - Paste di kolom atas
         
-        Pastikan script sudah dijalankan minimal 1x:
-        1. Buka **Extensions** → **Apps Script**
-        2. Paste script Anda
-        3. Klik **Run** (▶️)
-        4. Approve permissions
-        5. Kolom **Status_Text** akan muncul
+        **2. Multiple Sheets:**
+        - Baris 1: URL sheet pertama
+        - Baris 2: URL sheet kedua
+        - dst...
         
-        Script akan update status berdasarkan warna NPSN.
+        **3. Deduplikasi Otomatis:**
+        - Sistem otomatis hapus data duplikat
+        - Prioritas: Data yang **sudah ada status**
+        - Base on: `Trans. ID`
+        
+        **4. Permission:**
+        - Share → Anyone with link → Viewer
         """)
     
-    with st.expander("📖 Setting Permission"):
+    with st.expander("🎯 Prioritas Status"):
         st.markdown("""
-        **Langkah-langkah:**
-        1. Buka spreadsheet Anda
-        2. Klik **Share** (pojok kanan atas)
-        3. **General access** → **Anyone with the link**
-        4. Role: **Viewer**
-        5. Copy link & paste di atas
+        Jika ada data sama (Trans. ID sama) di beberapa sheet, sistem akan ambil yang:
+        
+        1. ✅ **Selesai** (prioritas tertinggi)
+        2. ⚙️ **Sedang Diproses**
+        3. 📄 **Kurang BAPP**
+        4. ⚠️ **Data Bermasalah**
+        5. ⏳ **Belum Dikerjakan** (prioritas terendah)
         """)
     
     st.info("💡 Auto refresh tiap 5 menit")
 
 # ======================================================
-# MAIN
+# MAIN - LOAD DATA
 # ======================================================
-if not sheet_url:
-    st.info("👆 Masukkan URL Google Spreadsheet di sidebar")
+url_list = [line.strip() for line in url_input.split('\n') if line.strip()]
+
+if not url_list:
+    st.info("👆 Masukkan minimal 1 URL di sidebar")
     st.stop()
 
-sheet_id = extract_sheet_id(sheet_url)
-if not sheet_id:
-    st.error("❌ URL tidak valid!\n\nFormat: `https://docs.google.com/spreadsheets/d/[SHEET_ID]/edit`")
-    st.stop()
+# Show URLs yang akan diload
+with st.expander(f"📋 URL yang akan diload ({len(url_list)} sheet)"):
+    for i, url in enumerate(url_list, 1):
+        sheet_id, gid = extract_sheet_id_and_gid(url)
+        if sheet_id:
+            st.success(f"{i}. Sheet ID: `{sheet_id}` | GID: `{gid}`")
+        else:
+            st.error(f"{i}. ❌ URL tidak valid: {url[:50]}...")
 
 # Load data
 if load_btn or "df" not in st.session_state:
-    with st.spinner("⏳ Memuat data dari spreadsheet..."):
-        df, result = load_all_sheets(sheet_id)
+    with st.spinner("⏳ Memuat data dari semua sheet..."):
+        df, load_results, dedup_info = load_multiple_sheets(url_list)
+        
+        # Show load results
+        st.markdown("### 📊 Hasil Loading")
+        result_df = pd.DataFrame(load_results)
+        st.dataframe(result_df, use_container_width=True, hide_index=True)
         
         if df is None:
-            st.error(result)
+            st.error("❌ Semua sheet gagal dimuat. Periksa URL dan permission!")
             st.stop()
         
+        # Show dedup info
+        if dedup_info:
+            st.success(f"✅ Data berhasil dimuat!")
+            
+            col_d1, col_d2, col_d3 = st.columns(3)
+            col_d1.metric("📥 Data Awal", f"{dedup_info['before']:,}")
+            col_d2.metric("🗑️ Duplikat Dihapus", f"{dedup_info['removed']:,}")
+            col_d3.metric("✅ Data Final", f"{dedup_info['after']:,}")
+            
+            if dedup_info['removed'] > 0:
+                st.info(f"💡 Ditemukan {dedup_info['duplicates_found']:,} data duplikat. Sistem otomatis pilih yang sudah ada status.")
+        
         st.session_state["df"] = df
-        st.session_state["load_info"] = result
+        st.session_state["load_results"] = load_results
+        st.session_state["dedup_info"] = dedup_info
         st.session_state["last_load"] = datetime.now()
         
-        # Success message
-        info = result
-        st.success(f"✅ Berhasil memuat {info['loaded_sheets']}/{info['total_sheets']} sheet dengan {info['total_rows']} baris data!")
-        
-        if info['failed_sheets']:
-            with st.expander("⚠️ Sheet yang gagal dimuat"):
-                for failed in info['failed_sheets']:
-                    st.warning(failed)
+        time.sleep(1)
 
-df = st.session_state["df"]
-load_info = st.session_state.get("load_info", {})
+df = st.session_state.get("df")
+if df is None:
+    st.warning("⚠️ Klik tombol 'Load Data' di sidebar untuk memulai")
+    st.stop()
 
-# Info boxes
+dedup_info = st.session_state.get("dedup_info", {})
+
+# ======================================================
+# INFO BOXES
+# ======================================================
+st.markdown("---")
 col_info1, col_info2, col_info3, col_info4 = st.columns(4)
-col_info1.metric("📋 Total Baris", len(df))
-col_info2.metric("📑 Sheet Dimuat", load_info.get('loaded_sheets', 0))
-col_info3.metric("📂 Total Sheet", load_info.get('total_sheets', 0))
+
+col_info1.metric("📋 Total Data", f"{len(df):,}")
+col_info2.metric("📑 Sheet Loaded", len(url_list))
+if dedup_info:
+    col_info3.metric("🗑️ Duplikat Removed", f"{dedup_info.get('removed', 0):,}")
 if "last_load" in st.session_state:
-    col_info4.metric("🕐 Terakhir Update", st.session_state["last_load"].strftime("%H:%M:%S"))
+    col_info4.metric("🕐 Last Load", st.session_state["last_load"].strftime("%H:%M:%S"))
 
 # ======================================================
 # VALIDASI KOLOM
 # ======================================================
-st.markdown("---")
-
-# Cek kolom yang tersedia
-available_cols = df.columns.tolist()
-
-st.info(f"**Kolom terdeteksi:** {', '.join(available_cols[:10])}..." if len(available_cols) > 10 else f"**Kolom terdeteksi:** {', '.join(available_cols)}")
-
-# Kolom wajib
 required_columns = ["Trans. ID", "Nama", "Jenjang", "Kabupaten", "Propinsi", "NPSN"]
 
-# Cek Status_Text
 if "Status_Text" not in df.columns:
-    st.error("❌ **Kolom 'Status_Text' tidak ditemukan!**")
-    st.warning("⚠️ **Solusi:**\n1. Jalankan Apps Script yang sudah Anda buat\n2. Script akan membuat kolom 'Status_Text' otomatis\n3. Refresh dashboard ini")
+    st.error("❌ Kolom 'Status_Text' tidak ditemukan!")
+    st.warning("⚠️ Jalankan Apps Script dulu untuk generate kolom Status_Text")
     st.stop()
 
-# Optional columns (kalau ada)
+missing = [c for c in required_columns if c not in df.columns]
+if missing:
+    st.error(f"❌ Kolom tidak ditemukan: {', '.join(missing)}")
+    with st.expander("Lihat kolom tersedia"):
+        st.write(df.columns.tolist())
+    st.stop()
+
+# Optional columns
 optional_columns = ["Keterangan", "Petugas", "PIC", "Telp", "Alamat"]
-display_columns = ["__sheet_name"] + required_columns + ["Status_Text"]
+display_columns = ["__source"] + required_columns + ["Status_Text"]
 
 for col in optional_columns:
     if col in df.columns:
         display_columns.append(col)
 
-missing = [c for c in required_columns if c not in df.columns]
-if missing:
-    st.error(f"❌ Kolom wajib tidak ditemukan: {', '.join(missing)}")
-    with st.expander("📋 Lihat semua kolom"):
-        st.write(available_cols)
-    st.stop()
-
 # ======================================================
-# PROCESS DATA
+# PROCESS STATUS
 # ======================================================
-df["Status_Category"] = df["Status_Text"].apply(normalize_status)
-
-# Debug: lihat sample status
-with st.expander("🔍 Debug: Sample Status dari Spreadsheet"):
-    sample_df = df[["__sheet_name", "NPSN", "Status_Text", "Status_Category"]].head(10)
-    st.dataframe(sample_df, use_container_width=True)
+if "Status_Category" not in df.columns:
+    df["Status_Category"] = df["Status_Text"].apply(normalize_status)
 
 # ======================================================
 # METRICS
 # ======================================================
-st.markdown('<div class="section-header"><h3>📈 Ringkasan Status (Semua Sheet)</h3></div>', unsafe_allow_html=True)
+st.markdown("---")
+st.markdown('<div class="section-header"><h3>📈 Ringkasan Status</h3></div>', unsafe_allow_html=True)
 
 c1, c2, c3, c4, c5 = st.columns(5)
 
@@ -426,8 +464,11 @@ with col_filter1:
     )
 
 with col_filter2:
-    sheet_list = ["Semua Sheet"] + sorted(df["__sheet_name"].unique().tolist())
-    sheet_filter = st.selectbox("📑 Sheet", sheet_list)
+    if "__source" in df.columns:
+        source_list = ["Semua Source"] + sorted(df["__source"].unique().tolist())
+        source_filter = st.selectbox("📑 Source Sheet", source_list)
+    else:
+        source_filter = "Semua Source"
 
 with col_filter3:
     search_text = st.text_input("🔍 Cari (Nama/NPSN/Kabupaten)", "")
@@ -438,8 +479,8 @@ filtered_df = df.copy()
 if status_filter != "Semua Status":
     filtered_df = filtered_df[filtered_df["Status_Category"] == status_filter]
 
-if sheet_filter != "Semua Sheet":
-    filtered_df = filtered_df[filtered_df["__sheet_name"] == sheet_filter]
+if source_filter != "Semua Source" and "__source" in filtered_df.columns:
+    filtered_df = filtered_df[filtered_df["__source"] == source_filter]
 
 if search_text:
     search_cols = ["Nama", "NPSN", "Kabupaten"]
@@ -454,6 +495,7 @@ st.markdown(f"**Menampilkan {len(filtered_df):,} dari {len(df):,} baris**")
 # ======================================================
 # TABLE
 # ======================================================
+st.markdown("---")
 st.markdown('<div class="section-header"><h3>📋 Data Detail</h3></div>', unsafe_allow_html=True)
 
 def style_status_cell(val):
@@ -462,7 +504,6 @@ def style_status_cell(val):
     color = get_status_color(cat)
     return f"background-color:{color};color:white;font-weight:600;padding:8px;border-radius:5px;text-align:center;"
 
-# Display dengan styling
 if not filtered_df.empty:
     st.dataframe(
         filtered_df[display_columns].style.applymap(
@@ -502,50 +543,54 @@ with col_dl2:
     )
 
 # ======================================================
-# BREAKDOWN PER SHEET
+# ANALYTICS
 # ======================================================
 st.markdown("---")
-with st.expander("📊 **Lihat Breakdown Detail per Sheet**"):
+with st.expander("📊 **Analytics & Breakdown**"):
     
-    # Summary table
-    sheet_summary = df.groupby(["__sheet_name", "Status_Category"]).size().reset_index(name="Jumlah")
-    pivot_summary = sheet_summary.pivot(index="__sheet_name", columns="Status_Category", values="Jumlah").fillna(0).astype(int)
+    tab1, tab2, tab3 = st.tabs(["📈 Per Source", "🔍 Deduplikasi Info", "📋 Summary"])
     
-    # Add total column
-    pivot_summary["TOTAL"] = pivot_summary.sum(axis=1)
+    with tab1:
+        if "__source" in df.columns:
+            st.subheader("Status per Source Sheet")
+            source_summary = df.groupby(["__source", "Status_Category"]).size().reset_index(name="Jumlah")
+            pivot_summary = source_summary.pivot(index="__source", columns="Status_Category", values="Jumlah").fillna(0).astype(int)
+            pivot_summary["TOTAL"] = pivot_summary.sum(axis=1)
+            st.dataframe(pivot_summary, use_container_width=True)
     
-    st.dataframe(pivot_summary, use_container_width=True)
+    with tab2:
+        st.subheader("🔍 Informasi Deduplikasi")
+        if dedup_info:
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Data Awal (Sebelum Dedup)", f"{dedup_info['before']:,}")
+                st.metric("Data Duplikat Ditemukan", f"{dedup_info['duplicates_found']:,}")
+            with col2:
+                st.metric("Data Final (Setelah Dedup)", f"{dedup_info['after']:,}")
+                st.metric("Data yang Dihapus", f"{dedup_info['removed']:,}")
+            
+            st.info("💡 Sistem otomatis memilih data dengan status terbaik (prioritas: Selesai → Proses → BAPP → Bermasalah → Belum)")
     
-    # Charts per sheet
-    st.markdown("#### 📈 Visualisasi per Sheet")
-    
-    selected_sheet_viz = st.selectbox(
-        "Pilih sheet untuk visualisasi:",
-        df["__sheet_name"].unique().tolist()
-    )
-    
-    sheet_data = df[df["__sheet_name"] == selected_sheet_viz]
-    status_counts = sheet_data["Status_Category"].value_counts()
-    
-    col_v1, col_v2 = st.columns(2)
-    
-    with col_v1:
-        st.markdown(f"**Status di: {selected_sheet_viz}**")
-        for status, count in status_counts.items():
-            emoji = get_status_emoji(status)
-            pct = (count/len(sheet_data)*100)
-            st.metric(f"{emoji} {status}", f"{count}", f"{pct:.1f}%")
-    
-    with col_v2:
-        st.markdown("**Progress Chart**")
-        for status in ["Belum Dikerjakan", "Sedang Diproses", "Kurang BAPP", "Selesai", "Data Bermasalah"]:
-            if status in status_counts:
-                count = status_counts[status]
-                pct = count/len(sheet_data)
-                color = get_status_color(status)
-                st.markdown(f"**{status}**")
-                st.progress(pct)
-                st.caption(f"{count} sekolah ({pct*100:.1f}%)")
+    with tab3:
+        st.subheader("📋 Summary Keseluruhan")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**Status Distribution**")
+            for status in ["Selesai", "Sedang Diproses", "Kurang BAPP", "Data Bermasalah", "Belum Dikerjakan"]:
+                count = (df["Status_Category"] == status).sum()
+                pct = (count/len(df)*100) if len(df) > 0 else 0
+                emoji = get_status_emoji(status)
+                st.metric(f"{emoji} {status}", f"{count:,}", f"{pct:.1f}%")
+        
+        with col2:
+            st.markdown("**Data Sources**")
+            if "__source" in df.columns:
+                source_counts = df["__source"].value_counts()
+                for source, count in source_counts.items():
+                    pct = (count/len(df)*100)
+                    st.metric(source, f"{count:,}", f"{pct:.1f}%")
 
 # ======================================================
 # FOOTER
@@ -553,7 +598,7 @@ with st.expander("📊 **Lihat Breakdown Detail per Sheet**"):
 st.markdown("---")
 st.markdown("""
 <div class='dashboard-footer'>
-    <p>🚀 Dashboard Monitoring v4.0 • Multi Sheet • Apps Script Integration • Auto Refresh</p>
-    <p style='font-size:0.8rem; color:#999;'>Powered by Streamlit | Data from Google Sheets</p>
+    <p>🚀 Dashboard Monitoring v5.0 • Multi-Sheet GID • Smart Deduplication</p>
+    <p style='font-size:0.8rem; color:#999;'>Powered by Streamlit | Prioritas: Data dengan Status Terlengkap</p>
 </div>
 """, unsafe_allow_html=True)
