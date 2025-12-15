@@ -14,7 +14,7 @@ st.set_page_config(
     page_title="Dashboard Monitoring Pekerjaan",
     layout="wide",
     initial_sidebar_state="expanded",
-    menu_items={'About': "Dashboard Monitoring v5.0 - GID Multi Input"}
+    menu_items={'About': "Dashboard Monitoring v5.0 - Professional Edition"}
 )
 
 REFRESH_INTERVAL = 300  # 5 menit
@@ -28,37 +28,234 @@ st.markdown(
 )
 
 # ======================================================
-# CSS
+# PROFESSIONAL CSS DESIGN
 # ======================================================
 st.markdown("""
 <style>
-.dashboard-header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    padding: 2rem;
-    border-radius: 10px;
-    color: white;
-    text-align: center;
-    margin-bottom: 2rem;
-}
-.section-header {
-    background: #f8f9fa;
-    padding: 1rem;
-    border-radius: 8px;
-    margin: 1rem 0;
-}
-.dashboard-footer {
-    text-align: center;
-    padding: 1rem;
-    margin-top: 2rem;
-    color: #666;
-}
-.url-input-box {
-    background: #f0f9ff;
-    padding: 1rem;
-    border-radius: 8px;
-    border-left: 4px solid #3b82f6;
-    margin: 0.5rem 0;
-}
+    /* Import Professional Font */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    
+    /* Global Styles */
+    * {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    
+    /* Main Container */
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+        max-width: 1400px;
+    }
+    
+    /* Header Profesional */
+    .dashboard-header {
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        padding: 2.5rem 3rem;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        margin-bottom: 2rem;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .dashboard-header h1 {
+        color: #ffffff;
+        font-size: 2rem;
+        font-weight: 800;
+        margin: 0;
+        letter-spacing: -0.5px;
+    }
+    
+    .dashboard-header p {
+        color: #cbd5e1;
+        font-size: 0.9rem;
+        margin: 0.5rem 0 0 0;
+        font-weight: 500;
+    }
+    
+    /* Section Headers */
+    .section-header {
+        background: #ffffff;
+        padding: 1.25rem 1.5rem;
+        border-radius: 8px;
+        margin: 1.5rem 0 1rem 0;
+        border-left: 4px solid #0f172a;
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    }
+    
+    .section-header h3 {
+        color: #0f172a;
+        font-size: 1.1rem;
+        font-weight: 700;
+        margin: 0;
+        letter-spacing: -0.3px;
+    }
+    
+    /* Metric Cards */
+    [data-testid="stMetricValue"] {
+        font-size: 2rem;
+        font-weight: 800;
+        color: #0f172a;
+    }
+    
+    [data-testid="stMetricLabel"] {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    [data-testid="stMetricDelta"] {
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    
+    /* Buttons */
+    .stButton > button {
+        border-radius: 6px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        border: none;
+        transition: all 0.2s ease;
+        text-transform: uppercase;
+        font-size: 0.85rem;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Input Fields */
+    .stTextInput > div > div > input {
+        border-radius: 6px;
+        border: 2px solid #e2e8f0;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+    
+    .stTextInput > div > div > input:focus {
+        border-color: #0f172a;
+        box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.1);
+    }
+    
+    /* Select Boxes */
+    .stSelectbox > div > div {
+        border-radius: 6px;
+        border: 2px solid #e2e8f0;
+        font-weight: 500;
+    }
+    
+    /* Data Tables */
+    .stDataFrame {
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Expander */
+    .streamlit-expanderHeader {
+        background-color: #f8fafc;
+        border-radius: 6px;
+        font-weight: 600;
+        color: #0f172a;
+        border: 1px solid #e2e8f0;
+    }
+    
+    /* Progress Bar */
+    .stProgress > div > div > div > div {
+        background-color: #10b981;
+        border-radius: 4px;
+    }
+    
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: #f8fafc;
+        padding: 8px;
+        border-radius: 8px;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 6px;
+        font-weight: 600;
+        color: #64748b;
+        padding: 8px 16px;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background-color: #0f172a;
+        color: #ffffff;
+    }
+    
+    /* Sidebar */
+    [data-testid="stSidebar"] {
+        background-color: #f8fafc;
+        border-right: 1px solid #e2e8f0;
+    }
+    
+    [data-testid="stSidebar"] h1 {
+        color: #0f172a;
+        font-weight: 800;
+        font-size: 1.25rem;
+    }
+    
+    /* Info/Warning/Error Boxes */
+    .stAlert {
+        border-radius: 8px;
+        border: none;
+        font-weight: 500;
+    }
+    
+    /* Footer */
+    .dashboard-footer {
+        text-align: center;
+        padding: 2rem 1rem;
+        margin-top: 3rem;
+        border-top: 2px solid #e2e8f0;
+    }
+    
+    .dashboard-footer p {
+        color: #64748b;
+        font-weight: 600;
+        margin: 0.25rem 0;
+        font-size: 0.9rem;
+    }
+    
+    /* Download Buttons */
+    .stDownloadButton > button {
+        background-color: #0f172a;
+        color: white;
+        border-radius: 6px;
+        font-weight: 600;
+        border: none;
+        padding: 0.5rem 1rem;
+    }
+    
+    .stDownloadButton > button:hover {
+        background-color: #1e293b;
+        transform: translateY(-1px);
+    }
+    
+    /* Hide Streamlit Branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    
+    /* Custom Spacing */
+    .element-container {
+        margin-bottom: 0.5rem;
+    }
+    
+    /* Status Badge Styling */
+    .status-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 4px;
+        font-weight: 600;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -67,14 +264,11 @@ st.markdown("""
 # ======================================================
 def extract_sheet_id_and_gid(url):
     """Extract Sheet ID dan GID dari URL"""
-    # Extract sheet ID
     sheet_match = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", url)
     if not sheet_match:
         return None, None
     
     sheet_id = sheet_match.group(1)
-    
-    # Extract GID (jika ada)
     gid_match = re.search(r"[#&]gid=(\d+)", url)
     gid = gid_match.group(1) if gid_match else "0"
     
@@ -89,7 +283,6 @@ def load_sheet_by_gid(sheet_id, gid, sheet_label="Sheet"):
         if df.empty:
             raise Exception("Sheet kosong")
         
-        # Tambah identifier
         df["__source"] = sheet_label
         df["__gid"] = gid
         
@@ -106,13 +299,13 @@ def normalize_status(val):
     val = re.sub(r'[\u00A0\u200B\u200C\u200D\t\n\r]', ' ', val)
     val = re.sub(r'\s+', ' ', val)
     
-    if "SELESAI" in val or "COMPLETE" in val:
-        return "Selesai"
-    elif "KURANG BAPP" in val or "BAPP" in val:
-        return "Kurang BAPP"
-    elif "BERMASALAH" in val or "MASALAH" in val or "ERROR" in val:
+    if "BERMASALAH" in val or "MASALAH" in val or "ERROR" in val or "GAGAL" in val:
         return "Data Bermasalah"
-    elif "PROSES" in val or "PENGERJAAN" in val or "INSTALASI" in val:
+    elif "SELESAI" in val or "COMPLETE" in val or "SUKSES" in val:
+        return "Selesai"
+    elif "KURANG BAPP" in val or "BAPP" in val or "KURANG" in val:
+        return "Kurang BAPP"
+    elif "PROSES" in val or "PENGERJAAN" in val or "INSTALASI" in val or "DIKERJAKAN" in val:
         return "Sedang Diproses"
     elif "BELUM" in val:
         return "Belum Dikerjakan"
@@ -120,7 +313,7 @@ def normalize_status(val):
         return "Sedang Diproses"
 
 def get_status_priority(status):
-    """Priority untuk deduplication - semakin kecil semakin prioritas"""
+    """Priority untuk deduplication"""
     priority_map = {
         "Selesai": 1,
         "Sedang Diproses": 2,
@@ -131,29 +324,19 @@ def get_status_priority(status):
     return priority_map.get(status, 99)
 
 def deduplicate_data(df):
-    """
-    Deduplikasi berdasarkan Trans. ID
-    Prioritas: Ambil data yang sudah ada status (bukan Belum Dikerjakan)
-    """
+    """Deduplikasi berdasarkan Trans. ID dengan prioritas status"""
     if "Trans. ID" not in df.columns:
         st.warning("⚠️ Kolom 'Trans. ID' tidak ditemukan, skip deduplikasi")
         return df, {}
     
-    # Normalize status
     df["Status_Category"] = df["Status_Text"].apply(normalize_status)
     df["__priority"] = df["Status_Category"].apply(get_status_priority)
     
-    # Count duplicates before
     before_count = len(df)
     duplicate_count = df.duplicated(subset=["Trans. ID"], keep=False).sum()
     
-    # Sort by priority (ascending) - yang prioritas tinggi di atas
     df_sorted = df.sort_values(by=["Trans. ID", "__priority"])
-    
-    # Keep first (yang prioritas paling tinggi)
     df_dedup = df_sorted.drop_duplicates(subset=["Trans. ID"], keep="first")
-    
-    # Remove helper column
     df_dedup = df_dedup.drop(columns=["__priority"])
     
     after_count = len(df_dedup)
@@ -230,10 +413,7 @@ def load_multiple_sheets(url_list):
     if not all_dfs:
         return None, load_results, None
     
-    # Gabungkan semua data
     combined_df = pd.concat(all_dfs, ignore_index=True)
-    
-    # Deduplikasi
     deduped_df, dedup_info = deduplicate_data(combined_df)
     
     return deduped_df, load_results, dedup_info
@@ -243,24 +423,22 @@ def load_multiple_sheets(url_list):
 # ======================================================
 st.markdown(f"""
 <div class='dashboard-header'>
-    <h1>📊 Dashboard Monitoring Pekerjaan</h1>
-    <p>Multi-Sheet GID Support • Smart Deduplication • Last Update: {datetime.now().strftime('%d %B %Y, %H:%M:%S WIB')}</p>
+    <h1>📊 DASHBOARD MONITORING PEKERJAAN</h1>
+    <p>MULTI-SHEET GID SUPPORT • SMART DEDUPLICATION • LAST UPDATE: {datetime.now().strftime('%d %B %Y, %H:%M:%S WIB').upper()}</p>
 </div>
 """, unsafe_allow_html=True)
 
 # ======================================================
-# SIDEBAR - MULTI URL INPUT
+# SIDEBAR
 # ======================================================
 with st.sidebar:
-    st.title("⚙️ Input Data Source")
+    st.title("⚙️ KONFIGURASI")
     
-    st.markdown("### 🔗 Input URL Sheet (GID)")
+    st.markdown("### 🔗 URL DATA SOURCE")
     
-    # Initialize session state untuk dynamic URLs
     if "url_inputs" not in st.session_state:
         st.session_state.url_inputs = ["https://docs.google.com/spreadsheets/d/1eX5CeXR4xzYPPHikbfdm2JUBpL5HQ3LC9cAA0X4m-QQ/edit#gid=0"]
     
-    # Display all URL inputs
     urls_to_remove = []
     for idx, url in enumerate(st.session_state.url_inputs):
         col1, col2 = st.columns([4, 1])
@@ -274,34 +452,32 @@ with st.sidebar:
             st.session_state.url_inputs[idx] = new_url
         with col2:
             if len(st.session_state.url_inputs) > 1:
-                if st.button("🗑️", key=f"del_{idx}", help="Hapus URL ini"):
+                if st.button("🗑️", key=f"del_{idx}", help="Hapus URL"):
                     urls_to_remove.append(idx)
     
-    # Remove URLs yang ditandai untuk dihapus
     for idx in sorted(urls_to_remove, reverse=True):
         st.session_state.url_inputs.pop(idx)
     
-    # Button untuk add URL baru
     col_add1, col_add2 = st.columns([2, 2])
     with col_add1:
-        if st.button("➕ Tambah URL", use_container_width=True):
+        if st.button("➕ TAMBAH", use_container_width=True):
             st.session_state.url_inputs.append("")
             st.rerun()
     
     with col_add2:
-        if st.button("🔄 Reset Semua", use_container_width=True):
+        if st.button("🔄 RESET", use_container_width=True):
             st.session_state.url_inputs = [""]
             st.rerun()
     
-    st.caption(f"Total: {len(st.session_state.url_inputs)} URL")
+    st.caption(f"**TOTAL: {len(st.session_state.url_inputs)} URL**")
     
     st.markdown("---")
     
     col1, col2 = st.columns(2)
     with col1:
-        load_btn = st.button("🔄 Load Data", use_container_width=True, type="primary")
+        load_btn = st.button("🔄 LOAD DATA", use_container_width=True, type="primary")
     with col2:
-        clear_btn = st.button("🗑️ Clear Cache", use_container_width=True)
+        clear_btn = st.button("🗑️ CLEAR CACHE", use_container_width=True)
     
     if clear_btn:
         st.cache_data.clear()
@@ -309,87 +485,82 @@ with st.sidebar:
     
     st.markdown("---")
     
-    with st.expander("📖 Cara Pakai"):
+    with st.expander("📖 PETUNJUK PENGGUNAAN"):
         st.markdown("""
-        **1. Tambah URL:**
-        - Klik "➕ Tambah URL" untuk menambah input baru
-        - Setiap URL akan punya kolom sendiri
+        **CARA MENGGUNAKAN:**
         
-        **2. Ambil URL dengan GID:**
-        - Buka Google Sheets
-        - Klik tab sheet yang ingin diambil
-        - Copy URL dari browser (sudah ada #gid=xxx)
-        - Paste di kolom URL
+        1. **Tambah URL**
+           - Klik tombol "➕ TAMBAH"
+           - Input URL dengan format GID
         
-        **3. Hapus URL:**
-        - Klik 🗑️ di sebelah URL untuk menghapus
+        2. **Format URL**
+           ```
+           https://docs.google.com/.../edit#gid=xxx
+           ```
         
-        **4. Deduplikasi Otomatis:**
-        - Sistem otomatis hapus data duplikat
-        - Prioritas: Data yang **sudah ada status**
-        - Base on: `Trans. ID`
+        3. **Hapus URL**
+           - Klik tombol 🗑️ di samping URL
         
-        **5. Permission:**
-        - Share → Anyone with link → Viewer
+        4. **Load Data**
+           - Klik "🔄 LOAD DATA"
+           - Sistem akan memproses semua sheet
+        
+        5. **Permission**
+           - Share → Anyone with link → Viewer
         """)
     
-    with st.expander("🎯 Prioritas Status"):
+    with st.expander("🎯 PRIORITAS STATUS"):
         st.markdown("""
-        Jika ada data sama (Trans. ID sama) di beberapa sheet, sistem akan ambil yang:
+        **URUTAN PRIORITAS DEDUPLIKASI:**
         
-        1. ✅ **Selesai** (prioritas tertinggi)
-        2. ⚙️ **Sedang Diproses**
-        3. 📄 **Kurang BAPP**
-        4. ⚠️ **Data Bermasalah**
-        5. ⏳ **Belum Dikerjakan** (prioritas terendah)
+        1. ✅ SELESAI (Prioritas Tertinggi)
+        2. ⚙️ SEDANG DIPROSES
+        3. 📄 KURANG BAPP
+        4. ⚠️ DATA BERMASALAH
+        5. ⏳ BELUM DIKERJAKAN (Prioritas Terendah)
+        
+        *Sistem otomatis memilih data dengan status terbaik*
         """)
-    
-    st.info("💡 Auto refresh tiap 5 menit")
 
 # ======================================================
 # MAIN - LOAD DATA
 # ======================================================
-# Get clean URL list dari session state
 url_list = [url.strip() for url in st.session_state.url_inputs if url.strip()]
 
 if not url_list:
-    st.info("👆 Masukkan minimal 1 URL di sidebar")
+    st.info("👆 **MASUKKAN MINIMAL 1 URL DI SIDEBAR**")
     st.stop()
 
-# Show URLs yang akan diload
-with st.expander(f"📋 URL yang akan diload ({len(url_list)} sheet)"):
+with st.expander(f"📋 **URL YANG AKAN DIPROSES ({len(url_list)} SHEET)**"):
     for i, url in enumerate(url_list, 1):
         sheet_id, gid = extract_sheet_id_and_gid(url)
         if sheet_id:
-            st.success(f"{i}. Sheet ID: `{sheet_id}` | GID: `{gid}`")
+            st.success(f"**{i}.** Sheet ID: `{sheet_id}` | GID: `{gid}`")
         else:
-            st.error(f"{i}. ❌ URL tidak valid: {url[:50]}...")
+            st.error(f"**{i}.** ❌ URL TIDAK VALID: {url[:50]}...")
 
-# Load data
 if load_btn or "df" not in st.session_state:
-    with st.spinner("⏳ Memuat data dari semua sheet..."):
+    with st.spinner("⏳ MEMUAT DATA DARI SEMUA SHEET..."):
         df, load_results, dedup_info = load_multiple_sheets(url_list)
         
-        # Show load results
-        st.markdown("### 📊 Hasil Loading")
+        st.markdown("### 📊 HASIL LOADING")
         result_df = pd.DataFrame(load_results)
         st.dataframe(result_df, use_container_width=True, hide_index=True)
         
         if df is None:
-            st.error("❌ Semua sheet gagal dimuat. Periksa URL dan permission!")
+            st.error("❌ SEMUA SHEET GAGAL DIMUAT. PERIKSA URL DAN PERMISSION!")
             st.stop()
         
-        # Show dedup info
         if dedup_info:
-            st.success(f"✅ Data berhasil dimuat!")
+            st.success(f"✅ DATA BERHASIL DIMUAT!")
             
             col_d1, col_d2, col_d3 = st.columns(3)
-            col_d1.metric("📥 Data Awal", f"{dedup_info['before']:,}")
-            col_d2.metric("🗑️ Duplikat Dihapus", f"{dedup_info['removed']:,}")
-            col_d3.metric("✅ Data Final", f"{dedup_info['after']:,}")
+            col_d1.metric("📥 DATA AWAL", f"{dedup_info['before']:,}")
+            col_d2.metric("🗑️ DUPLIKAT DIHAPUS", f"{dedup_info['removed']:,}")
+            col_d3.metric("✅ DATA FINAL", f"{dedup_info['after']:,}")
             
             if dedup_info['removed'] > 0:
-                st.info(f"💡 Ditemukan {dedup_info['duplicates_found']:,} data duplikat. Sistem otomatis pilih yang sudah ada status.")
+                st.info(f"💡 Ditemukan **{dedup_info['duplicates_found']:,} data duplikat**. Sistem otomatis memilih data dengan status terlengkap.")
         
         st.session_state["df"] = df
         st.session_state["load_results"] = load_results
@@ -398,7 +569,7 @@ if load_btn or "df" not in st.session_state:
 
 df = st.session_state.get("df")
 if df is None:
-    st.warning("⚠️ Klik tombol 'Load Data' di sidebar untuk memulai")
+    st.warning("⚠️ **KLIK TOMBOL 'LOAD DATA' DI SIDEBAR UNTUK MEMULAI**")
     st.stop()
 
 dedup_info = st.session_state.get("dedup_info", {})
@@ -409,12 +580,12 @@ dedup_info = st.session_state.get("dedup_info", {})
 st.markdown("---")
 col_info1, col_info2, col_info3, col_info4 = st.columns(4)
 
-col_info1.metric("📋 Total Data", f"{len(df):,}")
-col_info2.metric("📑 Sheet Loaded", len(url_list))
+col_info1.metric("📋 TOTAL DATA", f"{len(df):,}")
+col_info2.metric("📑 SHEET LOADED", len(url_list))
 if dedup_info:
-    col_info3.metric("🗑️ Duplikat Removed", f"{dedup_info.get('removed', 0):,}")
+    col_info3.metric("🗑️ DUPLIKAT REMOVED", f"{dedup_info.get('removed', 0):,}")
 if "last_load" in st.session_state:
-    col_info4.metric("🕐 Last Load", st.session_state["last_load"].strftime("%H:%M:%S"))
+    col_info4.metric("🕐 LAST LOAD", st.session_state["last_load"].strftime("%H:%M:%S"))
 
 # ======================================================
 # VALIDASI KOLOM
@@ -422,18 +593,17 @@ if "last_load" in st.session_state:
 required_columns = ["Trans. ID", "Nama", "Jenjang", "Kabupaten", "Propinsi", "NPSN"]
 
 if "Status_Text" not in df.columns:
-    st.error("❌ Kolom 'Status_Text' tidak ditemukan!")
-    st.warning("⚠️ Jalankan Apps Script dulu untuk generate kolom Status_Text")
+    st.error("❌ **KOLOM 'Status_Text' TIDAK DITEMUKAN!**")
+    st.warning("⚠️ Jalankan Apps Script untuk generate kolom Status_Text")
     st.stop()
 
 missing = [c for c in required_columns if c not in df.columns]
 if missing:
-    st.error(f"❌ Kolom tidak ditemukan: {', '.join(missing)}")
+    st.error(f"❌ **KOLOM TIDAK DITEMUKAN:** {', '.join(missing)}")
     with st.expander("Lihat kolom tersedia"):
         st.write(df.columns.tolist())
     st.stop()
 
-# Optional columns
 optional_columns = ["Keterangan", "Petugas", "PIC", "Telp", "Alamat"]
 display_columns = ["__source"] + required_columns + ["Status_Text"]
 
@@ -447,11 +617,27 @@ for col in optional_columns:
 if "Status_Category" not in df.columns:
     df["Status_Category"] = df["Status_Text"].apply(normalize_status)
 
+with st.expander("🔍 **DEBUG: CEK STATUS TEXT DARI SPREADSHEET**"):
+    st.markdown("**SAMPLE 20 DATA PERTAMA:**")
+    
+    debug_cols = ["__source", "Trans. ID", "Nama", "Status_Text", "Status_Category"]
+    debug_df = df[debug_cols].head(20)
+    
+    st.dataframe(debug_df, use_container_width=True)
+    
+    st.markdown("---")
+    st.markdown("**UNIQUE STATUS TEXT TERDETEKSI:**")
+    unique_status = df["Status_Text"].value_counts().reset_index()
+    unique_status.columns = ["Status Text", "Jumlah"]
+    st.dataframe(unique_status, use_container_width=True)
+    
+    st.info("💡 Cek apakah 'DATA BERMASALAH' muncul di list. Jika tidak, Apps Script belum dijalankan.")
+
 # ======================================================
 # METRICS
 # ======================================================
 st.markdown("---")
-st.markdown('<div class="section-header"><h3>📈 Ringkasan Status</h3></div>', unsafe_allow_html=True)
+st.markdown('<div class="section-header"><h3>📈 RINGKASAN STATUS</h3></div>', unsafe_allow_html=True)
 
 c1, c2, c3, c4, c5 = st.columns(5)
 
@@ -472,38 +658,36 @@ c4.metric("✅ SELESAI", total_selesai,
 c5.metric("⚠️ BERMASALAH", total_bermasalah,
           delta=f"{(total_bermasalah/len(df)*100):.1f}%" if len(df) > 0 else "0%")
 
-# Progress bar
 total = len(df)
 if total > 0:
     progress_pct = (total_selesai / total) * 100
     st.progress(total_selesai / total)
-    st.markdown(f"**🎯 Progress Keseluruhan:** {progress_pct:.1f}% ({total_selesai:,} dari {total:,} sekolah)")
+    st.markdown(f"**🎯 PROGRESS KESELURUHAN: {progress_pct:.1f}% ({total_selesai:,} dari {total:,} sekolah)**")
 
 # ======================================================
 # FILTER
 # ======================================================
 st.markdown("---")
-st.markdown("### 🔎 Filter Data")
+st.markdown("### 🔎 FILTER DATA")
 
 col_filter1, col_filter2, col_filter3 = st.columns(3)
 
 with col_filter1:
     status_filter = st.selectbox(
-        "📊 Status",
+        "📊 STATUS",
         ["Semua Status", "Belum Dikerjakan", "Sedang Diproses", "Kurang BAPP", "Selesai", "Data Bermasalah"]
     )
 
 with col_filter2:
     if "__source" in df.columns:
         source_list = ["Semua Source"] + sorted(df["__source"].unique().tolist())
-        source_filter = st.selectbox("📑 Source Sheet", source_list)
+        source_filter = st.selectbox("📑 SOURCE SHEET", source_list)
     else:
         source_filter = "Semua Source"
 
 with col_filter3:
-    search_text = st.text_input("🔍 Cari (Nama/NPSN/Kabupaten)", "")
+    search_text = st.text_input("🔍 CARI (Nama/NPSN/Kabupaten)", "")
 
-# Apply filters
 filtered_df = df.copy()
 
 if status_filter != "Semua Status":
@@ -520,19 +704,19 @@ if search_text:
             mask = mask | filtered_df[col].astype(str).str.contains(search_text, case=False, na=False)
     filtered_df = filtered_df[mask]
 
-st.markdown(f"**Menampilkan {len(filtered_df):,} dari {len(df):,} baris**")
+st.markdown(f"**MENAMPILKAN {len(filtered_df):,} DARI {len(df):,} BARIS**")
 
 # ======================================================
 # TABLE
 # ======================================================
 st.markdown("---")
-st.markdown('<div class="section-header"><h3>📋 Data Detail</h3></div>', unsafe_allow_html=True)
+st.markdown('<div class="section-header"><h3>📋 DATA DETAIL</h3></div>', unsafe_allow_html=True)
 
 def style_status_cell(val):
     """Style untuk kolom status"""
     cat = normalize_status(val)
     color = get_status_color(cat)
-    return f"background-color:{color};color:white;font-weight:600;padding:8px;border-radius:5px;text-align:center;"
+    return f"background-color:{color};color:white;font-weight:700;padding:8px;border-radius:4px;text-align:center;text-transform:uppercase;letter-spacing:0.5px;font-size:0.85rem;"
 
 if not filtered_df.empty:
     st.dataframe(
@@ -544,7 +728,7 @@ if not filtered_df.empty:
         height=500
     )
 else:
-    st.warning("⚠️ Tidak ada data yang sesuai dengan filter")
+    st.warning("⚠️ **TIDAK ADA DATA YANG SESUAI DENGAN FILTER**")
 
 # ======================================================
 # DOWNLOAD
@@ -556,7 +740,7 @@ timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
 with col_dl1:
     st.download_button(
-        "📥 Download Hasil Filter (CSV)",
+        "📥 DOWNLOAD HASIL FILTER (CSV)",
         filtered_df.to_csv(index=False).encode('utf-8'),
         f"monitoring_filtered_{timestamp}.csv",
         "text/csv",
