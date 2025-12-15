@@ -4,6 +4,7 @@ st.cache_data.clear()
 import pandas as pd
 import re
 import requests
+import time
 from datetime import datetime
 
 # ======================================================
@@ -253,18 +254,46 @@ st.markdown(f"""
 with st.sidebar:
     st.title("⚙️ Input Data Source")
     
-    st.markdown("### 🔗 Masukkan URL Sheet (GID)")
-    st.caption("Bisa input lebih dari 1 URL. Satu URL per baris.")
+    st.markdown("### 🔗 Input URL Sheet (GID)")
     
-    # Text area untuk multiple URLs
-    default_urls = """https://docs.google.com/spreadsheets/d/1eX5CeXR4xzYPPHikbfdm2JUBpL5HQ3LC9cAA0X4m-QQ/edit#gid=0"""
+    # Initialize session state untuk dynamic URLs
+    if "url_inputs" not in st.session_state:
+        st.session_state.url_inputs = ["https://docs.google.com/spreadsheets/d/1eX5CeXR4xzYPPHikbfdm2JUBpL5HQ3LC9cAA0X4m-QQ/edit#gid=0"]
     
-    url_input = st.text_area(
-        "URL Spreadsheet dengan GID",
-        value=default_urls,
-        height=150,
-        help="Format: https://docs.google.com/spreadsheets/d/[SHEET_ID]/edit#gid=[GID]\n\nContoh:\n- gid=0 untuk sheet pertama\n- gid=123456 untuk sheet lain"
-    )
+    # Display all URL inputs
+    urls_to_remove = []
+    for idx, url in enumerate(st.session_state.url_inputs):
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            new_url = st.text_input(
+                f"URL #{idx+1}",
+                value=url,
+                key=f"url_{idx}",
+                label_visibility="collapsed"
+            )
+            st.session_state.url_inputs[idx] = new_url
+        with col2:
+            if len(st.session_state.url_inputs) > 1:
+                if st.button("🗑️", key=f"del_{idx}", help="Hapus URL ini"):
+                    urls_to_remove.append(idx)
+    
+    # Remove URLs yang ditandai untuk dihapus
+    for idx in sorted(urls_to_remove, reverse=True):
+        st.session_state.url_inputs.pop(idx)
+    
+    # Button untuk add URL baru
+    col_add1, col_add2 = st.columns([2, 2])
+    with col_add1:
+        if st.button("➕ Tambah URL", use_container_width=True):
+            st.session_state.url_inputs.append("")
+            st.rerun()
+    
+    with col_add2:
+        if st.button("🔄 Reset Semua", use_container_width=True):
+            st.session_state.url_inputs = [""]
+            st.rerun()
+    
+    st.caption(f"Total: {len(st.session_state.url_inputs)} URL")
     
     st.markdown("---")
     
@@ -282,23 +311,25 @@ with st.sidebar:
     
     with st.expander("📖 Cara Pakai"):
         st.markdown("""
-        **1. Ambil URL dengan GID:**
+        **1. Tambah URL:**
+        - Klik "➕ Tambah URL" untuk menambah input baru
+        - Setiap URL akan punya kolom sendiri
+        
+        **2. Ambil URL dengan GID:**
         - Buka Google Sheets
         - Klik tab sheet yang ingin diambil
         - Copy URL dari browser (sudah ada #gid=xxx)
-        - Paste di kolom atas
+        - Paste di kolom URL
         
-        **2. Multiple Sheets:**
-        - Baris 1: URL sheet pertama
-        - Baris 2: URL sheet kedua
-        - dst...
+        **3. Hapus URL:**
+        - Klik 🗑️ di sebelah URL untuk menghapus
         
-        **3. Deduplikasi Otomatis:**
+        **4. Deduplikasi Otomatis:**
         - Sistem otomatis hapus data duplikat
         - Prioritas: Data yang **sudah ada status**
         - Base on: `Trans. ID`
         
-        **4. Permission:**
+        **5. Permission:**
         - Share → Anyone with link → Viewer
         """)
     
@@ -318,7 +349,8 @@ with st.sidebar:
 # ======================================================
 # MAIN - LOAD DATA
 # ======================================================
-url_list = [line.strip() for line in url_input.split('\n') if line.strip()]
+# Get clean URL list dari session state
+url_list = [url.strip() for url in st.session_state.url_inputs if url.strip()]
 
 if not url_list:
     st.info("👆 Masukkan minimal 1 URL di sidebar")
@@ -363,8 +395,6 @@ if load_btn or "df" not in st.session_state:
         st.session_state["load_results"] = load_results
         st.session_state["dedup_info"] = dedup_info
         st.session_state["last_load"] = datetime.now()
-        
-        time.sleep(1)
 
 df = st.session_state.get("df")
 if df is None:
