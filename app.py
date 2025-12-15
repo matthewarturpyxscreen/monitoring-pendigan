@@ -6,6 +6,7 @@ import re
 import requests
 import time
 from datetime import datetime
+from urllib.parse import quote
 
 # ======================================================
 # CONFIG
@@ -17,19 +18,24 @@ st.set_page_config(
     menu_items={'About': "Dashboard Monitoring Pekerjaan v3.0"}
 )
 
-REFRESH_INTERVAL = 300  # 5 menit
+REFRESH_INTERVAL = 300  # 5 menit (AMAN Streamlit Cloud)
 
 # ======================================================
-# SESSION
+# AUTO REFRESH
 # ======================================================
-if "last_refresh" not in st.session_state:
-    st.session_state.last_refresh = time.time()
+st.markdown(
+    f"""<meta http-equiv="refresh" content="{REFRESH_INTERVAL}">""",
+    unsafe_allow_html=True
+)
 
 # ======================================================
-# CSS (DESIGN TIDAK DIUBAH)
+# CSS (DESIGN ASLI — TIDAK DIUBAH)
 # ======================================================
-st.markdown("""<style>/* CSS KAMU — TIDAK DIUBAH */</style>""", unsafe_allow_html=True)
-st.markdown(f"<meta http-equiv='refresh' content='{REFRESH_INTERVAL}'>", unsafe_allow_html=True)
+st.markdown("""
+<style>
+/* CSS KAMU — TIDAK DIUBAH */
+</style>
+""", unsafe_allow_html=True)
 
 # ======================================================
 # UTILITIES
@@ -39,12 +45,15 @@ def extract_sheet_id(url):
     return m.group(1) if m else None
 
 def get_sheet_names(sheet_id):
-    """Ambil semua nama sheet via gviz (STABIL)"""
-    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq"
+    """Ambil SEMUA nama sheet TANPA API"""
+    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}"
     html = requests.get(url).text
-    return re.findall(r'"name":"(.*?)"', html)
+    names = set(re.findall(r'"title":"([^"]+)"', html))
+    return list(names)
 
 def csv_by_name(sheet_id, sheet_name):
+    """CSV reader AMAN UNTUK NAMA SHEET ADA SPASI"""
+    sheet_name = quote(sheet_name)
     return f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
 
 @st.cache_data(ttl=REFRESH_INTERVAL)
@@ -52,12 +61,14 @@ def load_all_sheets(sheet_id):
     dfs = []
     sheet_names = get_sheet_names(sheet_id)
 
+    if not sheet_names:
+        return None, "Tidak ada sheet yang ditemukan"
+
     for name in sheet_names:
         try:
             df = pd.read_csv(csv_by_name(sheet_id, name))
-            if not df.empty:
-                df["__sheet"] = name
-                dfs.append(df)
+            df["__sheet"] = name
+            dfs.append(df)
         except:
             continue
 
@@ -67,14 +78,14 @@ def load_all_sheets(sheet_id):
     return pd.concat(dfs, ignore_index=True), None
 
 # ======================================================
-# STATUS NORMALIZER (ANTI TYPO + WARNA FIX)
+# STATUS NORMALIZER (FIX WARNA 100%)
 # ======================================================
 def normalize_status(val):
     if pd.isna(val):
         return "Belum Dikerjakan"
 
     val = str(val).upper()
-    val = re.sub(r'[\u00A0\u200B\u200C\u200D]', ' ', val)
+    val = re.sub(r'[\u00A0\u200B\u200C\u200D\t\n\r]', ' ', val)
     val = re.sub(r'\s+', ' ', val).strip()
 
     if "DATA BERMASALAH" in val:
@@ -110,7 +121,10 @@ st.markdown(f"""
 # SIDEBAR
 # ======================================================
 with st.sidebar:
-    sheet_url = st.text_input("🔗 Google Spreadsheet URL")
+    sheet_url = st.text_input(
+        "🔗 Google Spreadsheet URL",
+        value="https://docs.google.com/spreadsheets/d/1eX5CeXR4xzYPPHikbfdm2JUBpL5HQ3LC9cAA0X4m-QQ/edit"
+    )
     load_btn = st.button("📥 Load Semua Sheet")
 
 # ======================================================
@@ -125,24 +139,15 @@ if not sheet_id:
     st.error("URL Spreadsheet tidak valid")
     st.stop()
 
-if load_btn or "df" in st.session_state:
-    if load_btn:
-        with st.spinner("⏳ Memuat semua sheet..."):
-            df, err = load_all_sheets(sheet_id)
-            if err:
-                st.error(err)
-                st.stop()
-            st.session_state["df"] = df
+if load_btn or "df" not in st.session_state:
+    with st.spinner("⏳ Memuat semua sheet..."):
+        df, err = load_all_sheets(sheet_id)
+        if err:
+            st.error(err)
+            st.stop()
+        st.session_state["df"] = df
 
 df = st.session_state["df"]
-
-# ======================================================
-# AUTO BACKGROUND REFRESH
-# ======================================================
-if time.time() - st.session_state.last_refresh > REFRESH_INTERVAL:
-    st.session_state.last_refresh = time.time()
-    st.cache_data.clear()
-    st.experimental_rerun()
 
 # ======================================================
 # VALIDASI KOLOM
@@ -160,8 +165,7 @@ if missing:
 # ======================================================
 # PROCESS DATA
 # ======================================================
-df["Status_Text"] = df["Status_Text"].apply(normalize_status)
-df["Status_Category"] = df["Status_Text"]
+df["Status_Category"] = df["Status_Text"].apply(normalize_status)
 
 # ======================================================
 # METRICS
@@ -179,20 +183,32 @@ c5.metric("BERMASALAH", (df.Status_Category=="Data Bermasalah").sum())
 # FILTER
 # ======================================================
 status_filter = st.selectbox(
-    "Status",
-    ["Semua","Belum Dikerjakan","Sedang Diproses","Kurang BAPP","Selesai","Data Bermasalah"]
+    "Filter Status",
+    [
+        "Semua",
+        "Belum Dikerjakan",
+        "Sedang Diproses",
+        "Kurang BAPP",
+        "Selesai",
+        "Data Bermasalah"
+    ]
 )
 
-filtered_df = df if status_filter=="Semua" else df[df.Status_Category==status_filter]
+filtered_df = df.copy()
+if status_filter != "Semua":
+    filtered_df = filtered_df[filtered_df["Status_Category"] == status_filter]
 
 # ======================================================
 # TABLE
 # ======================================================
+def style_status(val):
+    cat = normalize_status(val)
+    return f"background-color:{get_status_color(cat)};color:white;font-weight:600"
+
 st.dataframe(
     filtered_df[required_columns]
         .style
-        .applymap(lambda v: f"background-color:{get_status_color(v)};color:white;font-weight:600",
-                  subset=["Status_Text"]),
+        .applymap(style_status, subset=["Status_Text"]),
     use_container_width=True,
     height=550
 )
@@ -212,6 +228,7 @@ st.download_button(
 # ======================================================
 st.markdown("""
 <div class='dashboard-footer'>
-    <p>🚀 Dashboard Monitoring v3.0 • Realtime • Multi Sheet</p>
+    <p>🚀 Dashboard Monitoring v3.0 • Multi Sheet • Realtime</p>
 </div>
 """, unsafe_allow_html=True)
+
