@@ -17,10 +17,10 @@ st.set_page_config(
     menu_items={'About': "Dashboard Monitoring Pekerjaan v3.0"}
 )
 
-REFRESH_INTERVAL = 300  # 5 menit (AMAN Streamlit Cloud)
+REFRESH_INTERVAL = 300  # 5 menit
 
 # ======================================================
-# REALTIME SESSION TRACKER
+# SESSION
 # ======================================================
 if "last_refresh" not in st.session_state:
     st.session_state.last_refresh = time.time()
@@ -28,16 +28,8 @@ if "last_refresh" not in st.session_state:
 # ======================================================
 # CSS (DESIGN TIDAK DIUBAH)
 # ======================================================
-st.markdown("""
-<style>
-/* CSS KAMU — TIDAK DIUBAH */
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown(
-    f"""<meta http-equiv="refresh" content="{REFRESH_INTERVAL}">""",
-    unsafe_allow_html=True
-)
+st.markdown("""<style>/* CSS KAMU — TIDAK DIUBAH */</style>""", unsafe_allow_html=True)
+st.markdown(f"<meta http-equiv='refresh' content='{REFRESH_INTERVAL}'>", unsafe_allow_html=True)
 
 # ======================================================
 # UTILITIES
@@ -46,26 +38,26 @@ def extract_sheet_id(url):
     m = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", url)
     return m.group(1) if m else None
 
-def get_all_gids(sheet_id):
-    """Ambil semua gid TANPA API"""
-    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}"
+def get_sheet_names(sheet_id):
+    """Ambil semua nama sheet via gviz (STABIL)"""
+    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq"
     html = requests.get(url).text
-    gids = set(re.findall(r'gid=([0-9]+)', html))
-    return list(gids)
+    return re.findall(r'"name":"(.*?)"', html)
 
-def csv_url(sheet_id, gid):
-    return f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
+def csv_by_name(sheet_id, sheet_name):
+    return f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
 
 @st.cache_data(ttl=REFRESH_INTERVAL)
 def load_all_sheets(sheet_id):
     dfs = []
-    gids = get_all_gids(sheet_id)
+    sheet_names = get_sheet_names(sheet_id)
 
-    for gid in gids:
+    for name in sheet_names:
         try:
-            df = pd.read_csv(csv_url(sheet_id, gid))
-            df["__gid"] = gid
-            dfs.append(df)
+            df = pd.read_csv(csv_by_name(sheet_id, name))
+            if not df.empty:
+                df["__sheet"] = name
+                dfs.append(df)
         except:
             continue
 
@@ -75,26 +67,25 @@ def load_all_sheets(sheet_id):
     return pd.concat(dfs, ignore_index=True), None
 
 # ======================================================
-# STATUS NORMALIZER (ANTI ERROR WARNA)
+# STATUS NORMALIZER (ANTI TYPO + WARNA FIX)
 # ======================================================
 def normalize_status(val):
     if pd.isna(val):
         return "Belum Dikerjakan"
 
     val = str(val).upper()
-    val = re.sub(r'[\u00A0\u200B\u200C\u200D\t\n\r]', ' ', val)
+    val = re.sub(r'[\u00A0\u200B\u200C\u200D]', ' ', val)
     val = re.sub(r'\s+', ' ', val).strip()
 
     if "DATA BERMASALAH" in val:
         return "Data Bermasalah"
-    elif "KURANG BAPP" in val:
+    if "KURANG BAPP" in val:
         return "Kurang BAPP"
-    elif "PROSES" in val or "INSTALASI" in val:
+    if "PROSES" in val or "INSTALASI" in val:
         return "Sedang Diproses"
-    elif "SELESAI" in val:
+    if "SELESAI" in val:
         return "Selesai"
-    else:
-        return "Belum Dikerjakan"
+    return "Belum Dikerjakan"
 
 def get_status_color(status):
     return {
@@ -123,7 +114,7 @@ with st.sidebar:
     load_btn = st.button("📥 Load Semua Sheet")
 
 # ======================================================
-# MAIN LOGIC
+# MAIN
 # ======================================================
 if not sheet_url:
     st.info("Masukkan URL Google Spreadsheet")
@@ -146,11 +137,10 @@ if load_btn or "df" in st.session_state:
 df = st.session_state["df"]
 
 # ======================================================
-# BACKGROUND REALTIME REFRESH
+# AUTO BACKGROUND REFRESH
 # ======================================================
-now = time.time()
-if now - st.session_state.last_refresh > REFRESH_INTERVAL:
-    st.session_state.last_refresh = now
+if time.time() - st.session_state.last_refresh > REFRESH_INTERVAL:
+    st.session_state.last_refresh = time.time()
     st.cache_data.clear()
     st.experimental_rerun()
 
@@ -164,7 +154,7 @@ required_columns = [
 
 missing = [c for c in required_columns if c not in df.columns]
 if missing:
-    st.error(f"Kolom tidak ditemukan di beberapa sheet: {missing}")
+    st.error(f"Kolom tidak ditemukan: {missing}")
     st.stop()
 
 # ======================================================
@@ -190,30 +180,19 @@ c5.metric("BERMASALAH", (df.Status_Category=="Data Bermasalah").sum())
 # ======================================================
 status_filter = st.selectbox(
     "Status",
-    [
-        "Semua",
-        "Belum Dikerjakan",
-        "Sedang Diproses",
-        "Kurang BAPP",
-        "Selesai",
-        "Data Bermasalah"
-    ]
+    ["Semua","Belum Dikerjakan","Sedang Diproses","Kurang BAPP","Selesai","Data Bermasalah"]
 )
 
-filtered_df = df.copy()
-if status_filter != "Semua":
-    filtered_df = filtered_df[filtered_df["Status_Category"] == status_filter]
+filtered_df = df if status_filter=="Semua" else df[df.Status_Category==status_filter]
 
 # ======================================================
 # TABLE
 # ======================================================
-def style_status(val):
-    return f"background-color:{get_status_color(val)};color:white;font-weight:600"
-
 st.dataframe(
     filtered_df[required_columns]
         .style
-        .applymap(style_status, subset=["Status_Text"]),
+        .applymap(lambda v: f"background-color:{get_status_color(v)};color:white;font-weight:600",
+                  subset=["Status_Text"]),
     use_container_width=True,
     height=550
 )
