@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
 import re
-import plotly.express as px
-import plotly.graph_objects as go
 from datetime import datetime
 
 # ======================================================
@@ -435,44 +433,16 @@ if load_btn or 'df' in st.session_state:
     col_chart1, col_chart2 = st.columns(2)
     
     with col_chart1:
-        # Status Distribution Pie Chart
+        st.markdown("#### Distribusi Status")
+        # Status Distribution
         status_counts = df['Status_Category'].value_counts()
-        fig_pie = go.Figure(data=[go.Pie(
-            labels=status_counts.index,
-            values=status_counts.values,
-            hole=0.4,
-            marker=dict(colors=[get_status_color(s) for s in status_counts.index]),
-            textinfo='label+percent',
-            textfont=dict(size=12, color='white', family='Inter')
-        )])
-        fig_pie.update_layout(
-            title="Distribusi Status",
-            height=350,
-            margin=dict(l=20, r=20, t=40, b=20),
-            paper_bgcolor='white',
-            font=dict(family='Inter')
-        )
-        st.plotly_chart(fig_pie, use_container_width=True)
+        st.bar_chart(status_counts, use_container_width=True, height=300)
     
     with col_chart2:
+        st.markdown("#### Top 10 Kabupaten")
         # Top 10 Kabupaten
         top_kabupaten = df['Kabupaten'].value_counts().head(10)
-        fig_bar = go.Figure(data=[go.Bar(
-            x=top_kabupaten.values,
-            y=top_kabupaten.index,
-            orientation='h',
-            marker=dict(color='#667eea')
-        )])
-        fig_bar.update_layout(
-            title="Top 10 Kabupaten",
-            height=350,
-            margin=dict(l=20, r=20, t=40, b=20),
-            xaxis_title="Jumlah",
-            yaxis_title="",
-            paper_bgcolor='white',
-            font=dict(family='Inter')
-        )
-        st.plotly_chart(fig_bar, use_container_width=True)
+        st.bar_chart(top_kabupaten, use_container_width=True, height=300)
     
     # ======================================================
     # FILTERS
