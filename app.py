@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import re
 
 # ======================================================
 # CONFIG
@@ -9,9 +10,9 @@ st.set_page_config(
     layout="wide"
 )
 
-REFRESH_INTERVAL = 300  # detik (5 menit)
+REFRESH_INTERVAL = 300  # 5 menit
 
-# Auto refresh halaman
+# Auto refresh
 st.markdown(
     f"<meta http-equiv='refresh' content='{REFRESH_INTERVAL}'>",
     unsafe_allow_html=True
@@ -21,42 +22,54 @@ st.markdown(
 # HEADER
 # ======================================================
 st.title("📊 Dashboard Monitoring Instalasi & BAPP")
-st.caption("Monitoring realtime dari Google Spreadsheet (CSV)")
+st.caption("Cukup masukkan link Google Spreadsheet (edit/view)")
 
 # ======================================================
-# INPUT LINK SPREADSHEET
+# INPUT LINK SPREADSHEET (NORMAL)
 # ======================================================
-csv_url = st.text_input(
-    "🔗 Masukkan link Google Spreadsheet (CSV)",
-    placeholder="https://docs.google.com/spreadsheets/d/e/xxxx/pub?output=csv"
+sheet_url = st.text_input(
+    "🔗 Masukkan link Google Spreadsheet",
+    placeholder="https://docs.google.com/spreadsheets/d/xxxxx/edit"
 )
 
 load_btn = st.button("📥 Load Data")
 
 # ======================================================
+# UTIL: EXTRACT ID & BUILD CSV URL
+# ======================================================
+def convert_to_csv_url(sheet_url: str) -> str:
+    match = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", sheet_url)
+    if not match:
+        raise ValueError("Link spreadsheet tidak valid")
+
+    sheet_id = match.group(1)
+    return f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
+
+# ======================================================
 # LOAD DATA
 # ======================================================
 @st.cache_data(ttl=REFRESH_INTERVAL)
-def load_data(url):
-    return pd.read_csv(url)
+def load_data(csv_url):
+    return pd.read_csv(csv_url)
 
-if not csv_url:
-    st.info("Masukkan link CSV Google Spreadsheet untuk mulai.")
+if not sheet_url:
+    st.info("Masukkan link Google Spreadsheet untuk memulai.")
     st.stop()
 
 if load_btn:
     try:
+        csv_url = convert_to_csv_url(sheet_url)
         df = load_data(csv_url)
-        st.success("✅ Data berhasil dimuat")
-    except Exception:
-        st.error("❌ Gagal membaca data. Pastikan link CSV & akses Viewer.")
+        st.success("✅ Data berhasil dimuat dari Google Spreadsheet")
+    except Exception as e:
+        st.error("❌ Gagal memuat data. Pastikan link valid & akses Viewer.")
         st.stop()
 else:
-    st.warning("Klik **Load Data** setelah memasukkan link CSV.")
+    st.warning("Klik **Load Data** setelah memasukkan link.")
     st.stop()
 
 # ======================================================
-# SELECT FIELD YANG DIPAKAI
+# FIELD YANG DIPAKAI (DARI FILE KAMU)
 # ======================================================
 required_columns = [
     "Trans. ID",
@@ -72,7 +85,6 @@ required_columns = [
 ]
 
 missing_cols = [c for c in required_columns if c not in df.columns]
-
 if missing_cols:
     st.error(f"❌ Kolom tidak ditemukan: {', '.join(missing_cols)}")
     st.stop()
@@ -80,7 +92,7 @@ if missing_cols:
 df = df[required_columns]
 
 # ======================================================
-# STATUS COLOR MAPPING
+# STATUS COLOR
 # ======================================================
 def status_style(val):
     val = str(val).upper()
@@ -96,19 +108,17 @@ def status_style(val):
 # METRICS
 # ======================================================
 st.divider()
-col1, col2, col3 = st.columns(3)
+c1, c2, c3 = st.columns(3)
 
-col1.metric(
+c1.metric(
     "🔵 Kurang BAPP",
     df["Status"].str.contains("BAPP|KURANG", case=False, na=False).sum()
 )
-
-col2.metric(
-    "🟡 Sedang Diproses",
+c2.metric(
+    "🟡 Diproses",
     df["Status"].str.contains("PROSES|INSTALASI", case=False, na=False).sum()
 )
-
-col3.metric(
+c3.metric(
     "🟢 Selesai",
     df["Status"].str.contains("SELESAI", case=False, na=False).sum()
 )
@@ -117,27 +127,21 @@ col3.metric(
 # FILTER
 # ======================================================
 st.divider()
-st.subheader("🔎 Filter Data")
+provinsi = st.multiselect(
+    "Filter Provinsi",
+    sorted(df["Propinsi"].dropna().unique()),
+    default=sorted(df["Propinsi"].dropna().unique())
+)
 
-col_f1, col_f2 = st.columns(2)
-
-with col_f1:
-    provinsi_filter = st.multiselect(
-        "Provinsi",
-        options=sorted(df["Propinsi"].dropna().unique()),
-        default=sorted(df["Propinsi"].dropna().unique())
-    )
-
-with col_f2:
-    jenjang_filter = st.multiselect(
-        "Jenjang",
-        options=sorted(df["Jenjang"].dropna().unique()),
-        default=sorted(df["Jenjang"].dropna().unique())
-    )
+jenjang = st.multiselect(
+    "Filter Jenjang",
+    sorted(df["Jenjang"].dropna().unique()),
+    default=sorted(df["Jenjang"].dropna().unique())
+)
 
 filtered_df = df[
-    (df["Propinsi"].isin(provinsi_filter)) &
-    (df["Jenjang"].isin(jenjang_filter))
+    (df["Propinsi"].isin(provinsi)) &
+    (df["Jenjang"].isin(jenjang))
 ]
 
 # ======================================================
@@ -146,14 +150,12 @@ filtered_df = df[
 st.divider()
 st.subheader("📋 Detail Monitoring")
 
-styled_df = filtered_df.style.applymap(
-    status_style,
-    subset=["Status"]
+st.dataframe(
+    filtered_df.style.applymap(status_style, subset=["Status"]),
+    use_container_width=True
 )
-
-st.dataframe(styled_df, use_container_width=True)
 
 # ======================================================
 # FOOTER
 # ======================================================
-st.caption("⏱️ Auto refresh setiap 5 menit | Streamlit Dashboard")
+st.caption("⏱️ Auto refresh 5 menit | Input link spreadsheet biasa (tanpa CSV)")
