@@ -14,19 +14,15 @@ st.set_page_config(
     page_title="Dashboard Monitoring Pekerjaan",
     layout="wide",
     initial_sidebar_state="expanded",
-    menu_items={'About': "Dashboard Monitoring v5.0 - GID Multi Input"}
+    menu_items={'About': "Dashboard Monitoring v5.1 - No Auto Refresh"}
 )
 
-# REFRESH_INTERVAL = 300  # Auto refresh dimatikan
+# REFRESH_INTERVAL dihapus - tidak ada auto refresh
 
 # ======================================================
-# AUTO REFRESH - DISABLED
+# AUTO REFRESH - DIMATIKAN
 # ======================================================
-# Auto refresh dimatikan untuk performa lebih baik
-# st.markdown(
-#     f"""<meta http-equiv="refresh" content="{REFRESH_INTERVAL}">""",
-#     unsafe_allow_html=True
-# )
+# Auto refresh dinonaktifkan untuk kontrol manual yang lebih baik
 
 # ======================================================
 # CSS
@@ -353,7 +349,7 @@ with st.sidebar:
         5. ⏳ **Belum Dikerjakan** (prioritas terendah)
         """)
     
-    st.info("💡 Klik 'Load Data' untuk refresh data terbaru")
+    st.info("💡 Klik 'Load Data' untuk refresh manual")
 
 # ======================================================
 # MAIN - LOAD DATA
@@ -391,7 +387,6 @@ if df is None:
     st.stop()
 
 dedup_info = st.session_state.get("dedup_info", {})
-load_results = st.session_state.get("load_results", [])
 
 # ======================================================
 # INFO BOXES
@@ -586,7 +581,7 @@ with col_dl2:
 st.markdown("---")
 with st.expander("📊 **Analytics & Breakdown**"):
     
-    tab1, tab2, tab3, tab4 = st.tabs(["📈 Per Source", "🔍 Deduplikasi Info", "📋 Summary", "📊 Hasil Loading"])
+    tab1, tab2, tab3 = st.tabs(["📈 Per Source", "🔍 Deduplikasi Info", "📋 Summary"])
     
     with tab1:
         if "__source" in df.columns:
@@ -608,8 +603,6 @@ with st.expander("📊 **Analytics & Breakdown**"):
                 st.metric("Data yang Dihapus", f"{dedup_info['removed']:,}")
             
             st.info("💡 Sistem otomatis memilih data dengan status terbaik (prioritas: Selesai → Proses → BAPP → Bermasalah → Belum)")
-        else:
-            st.info("Tidak ada info deduplikasi")
     
     with tab3:
         st.subheader("📋 Summary Keseluruhan")
@@ -631,23 +624,6 @@ with st.expander("📊 **Analytics & Breakdown**"):
                 for source, count in source_counts.items():
                     pct = (count/len(df)*100)
                     st.metric(source, f"{count:,}", f"{pct:.1f}%")
-    
-    with tab4:
-        st.subheader("📊 Detail Hasil Loading per Sheet")
-        if load_results:
-            result_df = pd.DataFrame(load_results)
-            result_df.columns = ["URL", "Status", "Jumlah Baris"]
-            st.dataframe(result_df, use_container_width=True, hide_index=True)
-            
-            # Summary loading
-            success_count = sum(1 for r in load_results if "✅" in r.get("status", ""))
-            total_count = len(load_results)
-            
-            col1, col2 = st.columns(2)
-            col1.metric("Sheet Berhasil Dimuat", f"{success_count}/{total_count}")
-            col2.metric("Total Baris Dimuat", f"{sum(r.get('rows', 0) for r in load_results):,}")
-        else:
-            st.info("Belum ada data loading")
 
 # ======================================================
 # FOOTER
@@ -655,7 +631,7 @@ with st.expander("📊 **Analytics & Breakdown**"):
 st.markdown("---")
 st.markdown("""
 <div class='dashboard-footer'>
-    <p>🚀 Dashboard Monitoring v5.0 • Multi-Sheet GID • Smart Deduplication</p>
+    <p>🚀 Dashboard Monitoring v5.1 • Multi-Sheet GID • Smart Deduplication • Manual Refresh</p>
     <p style='font-size:0.8rem; color:#999;'>Powered by Streamlit | Prioritas: Data dengan Status Terlengkap</p>
 </div>
 """, unsafe_allow_html=True)
