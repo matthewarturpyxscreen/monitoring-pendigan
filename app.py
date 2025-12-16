@@ -17,15 +17,16 @@ st.set_page_config(
     menu_items={'About': "Dashboard Monitoring v5.0 - GID Multi Input"}
 )
 
-REFRESH_INTERVAL = 300  # 5 menit
+# REFRESH_INTERVAL = 300  # Auto refresh dimatikan
 
 # ======================================================
-# AUTO REFRESH
+# AUTO REFRESH - DISABLED
 # ======================================================
-st.markdown(
-    f"""<meta http-equiv="refresh" content="{REFRESH_INTERVAL}">""",
-    unsafe_allow_html=True
-)
+# Auto refresh dimatikan untuk performa lebih baik
+# st.markdown(
+#     f"""<meta http-equiv="refresh" content="{REFRESH_INTERVAL}">""",
+#     unsafe_allow_html=True
+# )
 
 # ======================================================
 # CSS
@@ -198,7 +199,7 @@ def get_status_emoji(status):
     }
     return emojis.get(status, "❓")
 
-@st.cache_data(ttl=REFRESH_INTERVAL, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)  # Cache 1 jam
 def load_multiple_sheets(url_list):
     """Load multiple sheets dari list URL"""
     all_dfs = []
@@ -267,11 +268,6 @@ with st.sidebar:
     # Initialize session state untuk dynamic URLs
     if "url_inputs" not in st.session_state:
         st.session_state.url_inputs = ["https://docs.google.com/spreadsheets/d/1eX5CeXR4xzYPPHikbfdm2JUBpL5HQ3LC9cAA0X4m-QQ/edit#gid=0"]
-    
-    # Auto-load saat refresh jika sudah ada data sebelumnya
-    # Simpan URL list untuk auto refresh
-    if "saved_url_list" not in st.session_state:
-        st.session_state.saved_url_list = []
     
     # Display all URL inputs
     urls_to_remove = []
@@ -357,7 +353,7 @@ with st.sidebar:
         5. ⏳ **Belum Dikerjakan** (prioritas terendah)
         """)
     
-    st.info("💡 Auto refresh tiap 5 menit")
+    st.info("💡 Klik 'Load Data' untuk refresh data terbaru")
 
 # ======================================================
 # MAIN - LOAD DATA
@@ -395,6 +391,7 @@ if df is None:
     st.stop()
 
 dedup_info = st.session_state.get("dedup_info", {})
+load_results = st.session_state.get("load_results", [])
 
 # ======================================================
 # INFO BOXES
@@ -589,7 +586,7 @@ with col_dl2:
 st.markdown("---")
 with st.expander("📊 **Analytics & Breakdown**"):
     
-    tab1, tab2, tab3 = st.tabs(["📈 Per Source", "🔍 Deduplikasi Info", "📋 Summary"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📈 Per Source", "🔍 Deduplikasi Info", "📋 Summary", "📊 Hasil Loading"])
     
     with tab1:
         if "__source" in df.columns:
@@ -611,6 +608,8 @@ with st.expander("📊 **Analytics & Breakdown**"):
                 st.metric("Data yang Dihapus", f"{dedup_info['removed']:,}")
             
             st.info("💡 Sistem otomatis memilih data dengan status terbaik (prioritas: Selesai → Proses → BAPP → Bermasalah → Belum)")
+        else:
+            st.info("Tidak ada info deduplikasi")
     
     with tab3:
         st.subheader("📋 Summary Keseluruhan")
@@ -632,6 +631,23 @@ with st.expander("📊 **Analytics & Breakdown**"):
                 for source, count in source_counts.items():
                     pct = (count/len(df)*100)
                     st.metric(source, f"{count:,}", f"{pct:.1f}%")
+    
+    with tab4:
+        st.subheader("📊 Detail Hasil Loading per Sheet")
+        if load_results:
+            result_df = pd.DataFrame(load_results)
+            result_df.columns = ["URL", "Status", "Jumlah Baris"]
+            st.dataframe(result_df, use_container_width=True, hide_index=True)
+            
+            # Summary loading
+            success_count = sum(1 for r in load_results if "✅" in r.get("status", ""))
+            total_count = len(load_results)
+            
+            col1, col2 = st.columns(2)
+            col1.metric("Sheet Berhasil Dimuat", f"{success_count}/{total_count}")
+            col2.metric("Total Baris Dimuat", f"{sum(r.get('rows', 0) for r in load_results):,}")
+        else:
+            st.info("Belum ada data loading")
 
 # ======================================================
 # FOOTER
