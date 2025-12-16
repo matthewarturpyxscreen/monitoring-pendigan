@@ -1,5 +1,4 @@
 import streamlit as st
-st.cache_data.clear()
 
 import pandas as pd
 import re
@@ -14,17 +13,7 @@ st.set_page_config(
     page_title="Dashboard Monitoring Pekerjaan",
     layout="wide",
     initial_sidebar_state="expanded",
-    menu_items={'About': "Dashboard Monitoring v5.1 - Auto Load on Refresh"}
-)
-
-REFRESH_INTERVAL = 300  # 5 menit
-
-# ======================================================
-# AUTO REFRESH
-# ======================================================
-st.markdown(
-    f"""<meta http-equiv="refresh" content="{REFRESH_INTERVAL}">""",
-    unsafe_allow_html=True
+    menu_items={'About': "Dashboard Monitoring v5.2 - Manual Refresh Only"}
 )
 
 # ======================================================
@@ -190,7 +179,6 @@ def get_status_emoji(status):
     }
     return emojis.get(status, "❓")
 
-@st.cache_data(ttl=REFRESH_INTERVAL, show_spinner=False)
 def load_multiple_sheets(url_list):
     """Load multiple sheets dari list URL"""
     all_dfs = []
@@ -245,17 +233,13 @@ def load_multiple_sheets(url_list):
 if "url_inputs" not in st.session_state:
     st.session_state.url_inputs = ["https://docs.google.com/spreadsheets/d/1eX5CeXR4xzYPPHikbfdm2JUBpL5HQ3LC9cAA0X4m-QQ/edit#gid=0"]
 
-# Initialize flag untuk auto load
-if "auto_load_done" not in st.session_state:
-    st.session_state.auto_load_done = False
-
 # ======================================================
 # HEADER
 # ======================================================
 st.markdown(f"""
 <div class='dashboard-header'>
     <h1>📊 Dashboard Monitoring Pekerjaan</h1>
-    <p>Multi-Sheet GID Support • Smart Deduplication • Auto Load • Last Update: {datetime.now().strftime('%d %B %Y, %H:%M:%S WIB')}</p>
+    <p>Multi-Sheet GID Support • Smart Deduplication • Manual Refresh • Last Update: {datetime.now().strftime('%d %B %Y, %H:%M:%S WIB')}</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -285,8 +269,9 @@ with st.sidebar:
                     urls_to_remove.append(idx)
     
     # Remove URLs yang ditandai untuk dihapus
-    for idx in sorted(urls_to_remove, reverse=True):
-        st.session_state.url_inputs.pop(idx)
+    if urls_to_remove:
+        for idx in sorted(urls_to_remove, reverse=True):
+            st.session_state.url_inputs.pop(idx)
         st.rerun()
     
     # Button untuk add URL baru
@@ -299,7 +284,6 @@ with st.sidebar:
     with col_add2:
         if st.button("🔄 Reset Semua", use_container_width=True):
             st.session_state.url_inputs = [""]
-            st.session_state.auto_load_done = False
             st.rerun()
     
     st.caption(f"Total: {len(st.session_state.url_inputs)} URL")
@@ -308,20 +292,28 @@ with st.sidebar:
     
     col1, col2 = st.columns(2)
     with col1:
-        manual_load_btn = st.button("🔄 Load Data", use_container_width=True, type="primary")
+        load_btn = st.button("🔄 Load Data", use_container_width=True, type="primary")
     with col2:
         clear_btn = st.button("🗑️ Clear Cache", use_container_width=True)
     
     if clear_btn:
-        st.cache_data.clear()
-        st.session_state.auto_load_done = False
+        # Clear semua data yang di-load, tapi URL tetap
+        if "df" in st.session_state:
+            del st.session_state["df"]
+        if "load_results" in st.session_state:
+            del st.session_state["load_results"]
+        if "dedup_info" in st.session_state:
+            del st.session_state["dedup_info"]
+        if "last_load" in st.session_state:
+            del st.session_state["last_load"]
+        st.success("✅ Cache cleared! URL masih tersimpan.")
         st.rerun()
     
     st.markdown("---")
     
-    # Status auto load
+    # Status last load
     if st.session_state.get("last_load"):
-        st.success(f"✅ Last Auto Load: {st.session_state['last_load'].strftime('%H:%M:%S')}")
+        st.success(f"✅ Last Load: {st.session_state['last_load'].strftime('%H:%M:%S')}")
     
     st.markdown("---")
     
@@ -340,10 +332,10 @@ with st.sidebar:
         **3. Hapus URL:**
         - Klik 🗑️ di sebelah URL untuk menghapus
         
-        **4. Auto Load:**
-        - Data akan otomatis di-load saat pertama kali buka
-        - Setiap refresh otomatis (5 menit), data akan di-load ulang
-        - URL tersimpan otomatis, tidak hilang saat refresh
+        **4. Load Data:**
+        - Klik tombol "🔄 Load Data" untuk refresh
+        - URL akan tetap tersimpan
+        - Tidak ada auto refresh
         
         **5. Deduplikasi Otomatis:**
         - Sistem otomatis hapus data duplikat
@@ -365,7 +357,7 @@ with st.sidebar:
         5. ⏳ **Belum Dikerjakan** (prioritas terendah)
         """)
     
-    st.info("💡 Auto refresh & load tiap 5 menit")
+    st.info("💡 Refresh manual aja - klik tombol Load Data")
 
 # ======================================================
 # MAIN - LOAD DATA
@@ -378,7 +370,7 @@ if not url_list:
     st.stop()
 
 # Show URLs yang akan diload
-with st.expander(f"📋 URL yang akan diload ({len(url_list)} sheet)"):
+with st.expander(f"📋 URL yang tersimpan ({len(url_list)} sheet)"):
     for i, url in enumerate(url_list, 1):
         sheet_id, gid = extract_sheet_id_and_gid(url)
         if sheet_id:
@@ -386,10 +378,8 @@ with st.expander(f"📋 URL yang akan diload ({len(url_list)} sheet)"):
         else:
             st.error(f"{i}. ❌ URL tidak valid: {url[:50]}...")
 
-# AUTO LOAD: Load otomatis jika belum pernah load atau tombol manual ditekan
-should_load = manual_load_btn or not st.session_state.auto_load_done or "df" not in st.session_state
-
-if should_load:
+# MANUAL LOAD ONLY
+if load_btn:
     with st.spinner("⏳ Memuat data dari semua sheet..."):
         df, load_results, dedup_info = load_multiple_sheets(url_list)
         
@@ -419,11 +409,10 @@ if should_load:
         st.session_state["load_results"] = load_results
         st.session_state["dedup_info"] = dedup_info
         st.session_state["last_load"] = datetime.now()
-        st.session_state.auto_load_done = True  # Tandai sudah load
 
 df = st.session_state.get("df")
 if df is None:
-    st.warning("⚠️ Tidak ada data. Sistem akan auto load...")
+    st.warning("⚠️ Klik tombol '🔄 Load Data' di sidebar untuk memuat data")
     st.stop()
 
 dedup_info = st.session_state.get("dedup_info", {})
@@ -653,7 +642,7 @@ with st.expander("📊 **Analytics & Breakdown**"):
 st.markdown("---")
 st.markdown("""
 <div class='dashboard-footer'>
-    <p>🚀 Dashboard Monitoring v5.1 • Multi-Sheet GID • Smart Deduplication • Auto Load</p>
-    <p style='font-size:0.8rem; color:#999;'>Powered by Streamlit | Auto refresh & load setiap 5 menit</p>
+    <p>🚀 Dashboard Monitoring v5.2 • Multi-Sheet GID • Smart Deduplication • Manual Refresh</p>
+    <p style='font-size:0.8rem; color:#999;'>Powered by Streamlit | URL Persistent • Refresh Manual</p>
 </div>
 """, unsafe_allow_html=True)
