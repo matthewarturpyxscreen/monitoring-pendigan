@@ -13,7 +13,7 @@ st.set_page_config(
     page_title="Dashboard Monitoring Pekerjaan",
     layout="wide",
     initial_sidebar_state="expanded",
-    menu_items={'About': "Dashboard Monitoring v5.2 - Manual Refresh Only"}
+    menu_items={'About': "Dashboard Monitoring v5.3 - Manual Refresh Only"}
 )
 
 # ======================================================
@@ -87,7 +87,7 @@ def load_sheet_by_gid(sheet_id, gid, sheet_label="Sheet"):
         return None, str(e)
 
 def normalize_status(val):
-    """Normalisasi status sesuai Apps Script"""
+    """Normalisasi status sesuai Apps Script - UPDATED dengan Revisi"""
     if pd.isna(val) or val == "":
         return "Belum Dikerjakan"
     
@@ -97,6 +97,8 @@ def normalize_status(val):
     
     if "SELESAI" in val or "COMPLETE" in val:
         return "Selesai"
+    elif "REVISI" in val or "DIREVISI" in val or "DI REVISI" in val:
+        return "Revisi"
     elif "KURANG BAPP" in val or "BAPP" in val:
         return "Kurang BAPP"
     elif "BERMASALAH" in val or "MASALAH" in val or "ERROR" in val:
@@ -113,9 +115,10 @@ def get_status_priority(status):
     priority_map = {
         "Selesai": 1,
         "Sedang Diproses": 2,
-        "Kurang BAPP": 3,
-        "Data Bermasalah": 4,
-        "Belum Dikerjakan": 5
+        "Revisi": 3,
+        "Kurang BAPP": 4,
+        "Data Bermasalah": 5,
+        "Belum Dikerjakan": 6
     }
     return priority_map.get(status, 99)
 
@@ -158,21 +161,23 @@ def deduplicate_data(df):
     return df_dedup, dedup_info
 
 def get_status_color(status):
-    """Warna untuk setiap status"""
+    """Warna untuk setiap status - UPDATED"""
     colors = {
         "Belum Dikerjakan": "#94a3b8",
         "Sedang Diproses": "#f59e0b",
-        "Kurang BAPP": "#3b82f6",
+        "Revisi": "#9333ea",  # Ungu/Purple
+        "Kurang BAPP": "#00ffff",  # Cyan
         "Selesai": "#10b981",
         "Data Bermasalah": "#ef4444"
     }
     return colors.get(status, "#94a3b8")
 
 def get_status_emoji(status):
-    """Emoji untuk setiap status"""
+    """Emoji untuk setiap status - UPDATED"""
     emojis = {
         "Belum Dikerjakan": "⏳",
         "Sedang Diproses": "⚙️",
+        "Revisi": "🔄",  # Emoji untuk Revisi
         "Kurang BAPP": "📄",
         "Selesai": "✅",
         "Data Bermasalah": "⚠️"
@@ -352,9 +357,10 @@ with st.sidebar:
         
         1. ✅ **Selesai** (prioritas tertinggi)
         2. ⚙️ **Sedang Diproses**
-        3. 📄 **Kurang BAPP**
-        4. ⚠️ **Data Bermasalah**
-        5. ⏳ **Belum Dikerjakan** (prioritas terendah)
+        3. 🔄 **Revisi**
+        4. 📄 **Kurang BAPP**
+        5. ⚠️ **Data Bermasalah**
+        6. ⏳ **Belum Dikerjakan** (prioritas terendah)
         """)
     
     st.info("💡 Refresh manual aja - klik tombol Load Data")
@@ -462,15 +468,16 @@ if "Status_Category" not in df.columns:
     df["Status_Category"] = df["Status_Text"].apply(normalize_status)
 
 # ======================================================
-# METRICS
+# METRICS - UPDATED dengan Revisi
 # ======================================================
 st.markdown("---")
 st.markdown('<div class="section-header"><h3>📈 Ringkasan Status</h3></div>', unsafe_allow_html=True)
 
-c1, c2, c3, c4, c5 = st.columns(5)
+c1, c2, c3, c4, c5, c6 = st.columns(6)
 
 total_belum = (df.Status_Category == "Belum Dikerjakan").sum()
 total_proses = (df.Status_Category == "Sedang Diproses").sum()
+total_revisi = (df.Status_Category == "Revisi").sum()
 total_bapp = (df.Status_Category == "Kurang BAPP").sum()
 total_selesai = (df.Status_Category == "Selesai").sum()
 total_bermasalah = (df.Status_Category == "Data Bermasalah").sum()
@@ -479,11 +486,13 @@ c1.metric("⏳ BELUM", total_belum,
           delta=f"{(total_belum/len(df)*100):.1f}%" if len(df) > 0 else "0%")
 c2.metric("⚙️ PROSES", total_proses,
           delta=f"{(total_proses/len(df)*100):.1f}%" if len(df) > 0 else "0%")
-c3.metric("📄 KURANG BAPP", total_bapp,
+c3.metric("🔄 REVISI", total_revisi,
+          delta=f"{(total_revisi/len(df)*100):.1f}%" if len(df) > 0 else "0%")
+c4.metric("📄 KURANG BAPP", total_bapp,
           delta=f"{(total_bapp/len(df)*100):.1f}%" if len(df) > 0 else "0%")
-c4.metric("✅ SELESAI", total_selesai,
+c5.metric("✅ SELESAI", total_selesai,
           delta=f"{(total_selesai/len(df)*100):.1f}%" if len(df) > 0 else "0%")
-c5.metric("⚠️ BERMASALAH", total_bermasalah,
+c6.metric("⚠️ BERMASALAH", total_bermasalah,
           delta=f"{(total_bermasalah/len(df)*100):.1f}%" if len(df) > 0 else "0%")
 
 # Progress bar
@@ -494,7 +503,7 @@ if total > 0:
     st.markdown(f"**🎯 Progress Keseluruhan:** {progress_pct:.1f}% ({total_selesai:,} dari {total:,} sekolah)")
 
 # ======================================================
-# FILTER
+# FILTER - UPDATED dengan Revisi
 # ======================================================
 st.markdown("---")
 st.markdown("### 🔎 Filter Data")
@@ -504,7 +513,7 @@ col_filter1, col_filter2, col_filter3 = st.columns(3)
 with col_filter1:
     status_filter = st.selectbox(
         "📊 Status",
-        ["Semua Status", "Belum Dikerjakan", "Sedang Diproses", "Kurang BAPP", "Selesai", "Data Bermasalah"]
+        ["Semua Status", "Belum Dikerjakan", "Sedang Diproses", "Revisi", "Kurang BAPP", "Selesai", "Data Bermasalah"]
     )
 
 with col_filter2:
@@ -587,7 +596,7 @@ with col_dl2:
     )
 
 # ======================================================
-# ANALYTICS
+# ANALYTICS - UPDATED dengan Revisi
 # ======================================================
 st.markdown("---")
 with st.expander("📊 **Analytics & Breakdown**"):
@@ -613,7 +622,7 @@ with st.expander("📊 **Analytics & Breakdown**"):
                 st.metric("Data Final (Setelah Dedup)", f"{dedup_info['after']:,}")
                 st.metric("Data yang Dihapus", f"{dedup_info['removed']:,}")
             
-            st.info("💡 Sistem otomatis memilih data dengan status terbaik (prioritas: Selesai → Proses → BAPP → Bermasalah → Belum)")
+            st.info("💡 Sistem otomatis memilih data dengan status terbaik (prioritas: Selesai → Proses → Revisi → BAPP → Bermasalah → Belum)")
     
     with tab3:
         st.subheader("📋 Summary Keseluruhan")
@@ -622,7 +631,7 @@ with st.expander("📊 **Analytics & Breakdown**"):
         
         with col1:
             st.markdown("**Status Distribution**")
-            for status in ["Selesai", "Sedang Diproses", "Kurang BAPP", "Data Bermasalah", "Belum Dikerjakan"]:
+            for status in ["Selesai", "Sedang Diproses", "Revisi", "Kurang BAPP", "Data Bermasalah", "Belum Dikerjakan"]:
                 count = (df["Status_Category"] == status).sum()
                 pct = (count/len(df)*100) if len(df) > 0 else 0
                 emoji = get_status_emoji(status)
@@ -642,7 +651,7 @@ with st.expander("📊 **Analytics & Breakdown**"):
 st.markdown("---")
 st.markdown("""
 <div class='dashboard-footer'>
-    <p>🚀 Dashboard Monitoring v5.2 • Multi-Sheet GID • Smart Deduplication • Manual Refresh</p>
-    <p style='font-size:0.8rem; color:#999;'>Powered by Streamlit | URL Persistent • Refresh Manual</p>
+    <p>🚀 Dashboard Monitoring v5.3 • Multi-Sheet GID • Smart Deduplication • Manual Refresh</p>
+    <p style='font-size:0.8rem; color:#999;'>Powered by Streamlit | URL Persistent • Refresh Manual • Updated with Revisi Status</p>
 </div>
 """, unsafe_allow_html=True)
