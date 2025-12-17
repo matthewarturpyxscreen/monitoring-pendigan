@@ -709,7 +709,7 @@ with col2:
         f"{(total_revisi/len(df)*100):.1f}%",
         help="ON CHECK"
     )
-    st.caption("🇬🇧 ON CHECK / REVISION")
+    st.caption("🇬🇧 ON CHECK ")
     
     st.metric(
         "📄 KURANG BAPP",
