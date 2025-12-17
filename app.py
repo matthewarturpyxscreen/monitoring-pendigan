@@ -707,7 +707,7 @@ with col2:
         "🔄 SUDAH DICEK",
         total_revisi,
         f"{(total_revisi/len(df)*100):.1f}%",
-        help="ON CHECK / REVISI"
+        help="ON CHECK"
     )
     st.caption("🇬🇧 ON CHECK / REVISION")
     
