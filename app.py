@@ -172,10 +172,16 @@ st.markdown("""
     }
     
     /* Progress Bar */
+    .stProgress > div > div > div {
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%) !important;
+        border-radius: 10px !important;
+        height: 24px !important;
+    }
+    
     .stProgress > div > div {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-        border-radius: 10px;
-        height: 16px;
+        background-color: #e2e8f0 !important;
+        border-radius: 10px !important;
+        height: 24px !important;
     }
     
     /* Info/Success/Warning Boxes */
@@ -680,25 +686,68 @@ total_bermasalah = (df.Status_Category == "Data Bermasalah").sum()
 
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.metric("⏳ NOT CHECKED", total_belum, f"{(total_belum/len(df)*100):.1f}%")
-    st.metric("⚙️ PROSES", total_proses, f"{(total_proses/len(df)*100):.1f}%")
+    st.metric(
+        "⏳ BELUM DICEK",
+        total_belum,
+        f"{(total_belum/len(df)*100):.1f}%",
+        help="NOT CHECKED / BELUM DIKERJAKAN"
+    )
+    st.caption("🇬🇧 NOT CHECKED")
+    
+    st.metric(
+        "⚙️ PROSES",
+        total_proses,
+        f"{(total_proses/len(df)*100):.1f}%",
+        help="ALREADY FOLLOWED UP TO THE COORDINATOR"
+    )
+    st.caption("🇬🇧 ALREADY FOLLOWED UP")
 
 with col2:
-    st.metric("🔄 ON CHECK", total_revisi, f"{(total_revisi/len(df)*100):.1f}%")
-    st.metric("📄 KURANG BAPP", total_bapp, f"{(total_bapp/len(df)*100):.1f}%")
+    st.metric(
+        "🔄 SUDAH DICEK",
+        total_revisi,
+        f"{(total_revisi/len(df)*100):.1f}%",
+        help="ON CHECK / REVISI"
+    )
+    st.caption("🇬🇧 ON CHECK / REVISION")
+    
+    st.metric(
+        "📄 KURANG BAPP",
+        total_bapp,
+        f"{(total_bapp/len(df)*100):.1f}%",
+        help="BAPP DATA LACK"
+    )
+    st.caption("🇬🇧 BAPP DATA LACK")
 
 with col3:
-    st.metric("✅ SELESAI", total_selesai, f"{(total_selesai/len(df)*100):.1f}%")
-    st.metric("⚠️ BERMASALAH", total_bermasalah, f"{(total_bermasalah/len(df)*100):.1f}%")
+    st.metric(
+        "✅ SELESAI",
+        total_selesai,
+        f"{(total_selesai/len(df)*100):.1f}%",
+        help="DONE / COMPLETED"
+    )
+    st.caption("🇬🇧 DONE / COMPLETED")
+    
+    st.metric(
+        "⚠️ BERMASALAH",
+        total_bermasalah,
+        f"{(total_bermasalah/len(df)*100):.1f}%",
+        help="CONSTRAINED DATA"
+    )
+    st.caption("🇬🇧 CONSTRAINED DATA")
 
 st.markdown("---")
 
 if len(df) > 0:
     progress_pct = (total_selesai / len(df)) * 100
+    
+    st.markdown("#### 🎯 Progress Keseluruhan / Overall Progress")
     st.progress(total_selesai / len(df))
+    
     st.markdown(f"""
     <div class='stats-badge'>
-        🎯 Progress: {progress_pct:.1f}% ({total_selesai:,}/{len(df):,})
+        📊 Progress: {progress_pct:.1f}% ({total_selesai:,}/{len(df):,}) - 
+        {total_selesai:,} Selesai dari {len(df):,} Total Data
     </div>
     """, unsafe_allow_html=True)
 
