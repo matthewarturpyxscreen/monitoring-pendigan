@@ -1,5 +1,4 @@
 import streamlit as st
-
 import pandas as pd
 import re
 import requests
@@ -13,7 +12,7 @@ st.set_page_config(
     page_title="Dashboard Monitoring Pekerjaan",
     layout="wide",
     initial_sidebar_state="expanded",
-    menu_items={'About': "Dashboard Monitoring v5.3 - Manual Refresh Only"}
+    menu_items={'About': "Dashboard Monitoring v5.4 - Fixed Column Detection"}
 )
 
 # ======================================================
@@ -56,14 +55,11 @@ st.markdown("""
 # ======================================================
 def extract_sheet_id_and_gid(url):
     """Extract Sheet ID dan GID dari URL"""
-    # Extract sheet ID
     sheet_match = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", url)
     if not sheet_match:
         return None, None
     
     sheet_id = sheet_match.group(1)
-    
-    # Extract GID (jika ada)
     gid_match = re.search(r"[#&]gid=(\d+)", url)
     gid = gid_match.group(1) if gid_match else "0"
     
@@ -161,28 +157,47 @@ def deduplicate_data(df):
     return df_dedup, dedup_info
 
 def get_status_color(status):
-    """Warna untuk setiap status - UPDATED"""
+    """Warna untuk setiap status"""
     colors = {
         "Belum Dikerjakan": "#94a3b8",
         "Sedang Diproses": "#f59e0b",
-        "Revisi": "#ff00ff",  # Magenta/Pink
-        "Kurang BAPP": "#00ffff",  # Cyan
+        "Revisi": "#ff00ff",
+        "Kurang BAPP": "#00ffff",
         "Selesai": "#10b981",
         "Data Bermasalah": "#ef4444"
     }
     return colors.get(status, "#94a3b8")
 
 def get_status_emoji(status):
-    """Emoji untuk setiap status - UPDATED"""
+    """Emoji untuk setiap status"""
     emojis = {
         "Belum Dikerjakan": "⏳",
         "Sedang Diproses": "⚙️",
-        "Revisi": "🔄",  # Emoji untuk Revisi
+        "Revisi": "🔄",
         "Kurang BAPP": "📄",
         "Selesai": "✅",
         "Data Bermasalah": "⚠️"
     }
     return emojis.get(status, "❓")
+
+def find_column(df, possible_names):
+    """Cari kolom dengan case-insensitive dan strip whitespace"""
+    # Buat mapping kolom yang sudah di-clean
+    df_cols_cleaned = {}
+    for col in df.columns:
+        # Clean: lowercase, strip, hapus whitespace berlebih
+        cleaned = str(col).lower().strip()
+        cleaned = re.sub(r'\s+', ' ', cleaned)
+        df_cols_cleaned[cleaned] = col
+    
+    # Cari dari possible_names
+    for name in possible_names:
+        cleaned_name = str(name).lower().strip()
+        cleaned_name = re.sub(r'\s+', ' ', cleaned_name)
+        if cleaned_name in df_cols_cleaned:
+            return df_cols_cleaned[cleaned_name]
+    
+    return None
 
 def load_multiple_sheets(url_list):
     """Load multiple sheets dari list URL"""
@@ -226,15 +241,12 @@ def load_multiple_sheets(url_list):
     # Gabungkan semua data
     combined_df = pd.concat(all_dfs, ignore_index=True)
     
-    # Deduplikasi
-    deduped_df, dedup_info = deduplicate_data(combined_df)
-    
-    return deduped_df, load_results, dedup_info
+    # Deduplikasi - PINDAH SETELAH RENAME
+    return combined_df, load_results, None
 
 # ======================================================
-# INITIALIZE SESSION STATE - PERSISTENT URLs
+# INITIALIZE SESSION STATE
 # ======================================================
-# Initialize url_inputs PERTAMA KALI saja
 if "url_inputs" not in st.session_state:
     st.session_state.url_inputs = ["https://docs.google.com/spreadsheets/d/1eX5CeXR4xzYPPHikbfdm2JUBpL5HQ3LC9cAA0X4m-QQ/edit#gid=0"]
 
@@ -244,19 +256,18 @@ if "url_inputs" not in st.session_state:
 st.markdown(f"""
 <div class='dashboard-header'>
     <h1>📊 Dashboard Monitoring Pekerjaan</h1>
-    <p>Multi-Sheet GID Support • Smart Deduplication • Manual Refresh • Last Update: {datetime.now().strftime('%d %B %Y, %H:%M:%S WIB')}</p>
+    <p>Multi-Sheet GID Support • Smart Deduplication • Manual Refresh • v5.4 Fixed</p>
 </div>
 """, unsafe_allow_html=True)
 
 # ======================================================
-# SIDEBAR - MULTI URL INPUT
+# SIDEBAR
 # ======================================================
 with st.sidebar:
     st.title("⚙️ Input Data Source")
     
     st.markdown("### 🔗 Input URL Sheet (GID)")
     
-    # Display all URL inputs
     urls_to_remove = []
     for idx, url in enumerate(st.session_state.url_inputs):
         col1, col2 = st.columns([4, 1])
@@ -273,13 +284,11 @@ with st.sidebar:
                 if st.button("🗑️", key=f"del_{idx}", help="Hapus URL ini"):
                     urls_to_remove.append(idx)
     
-    # Remove URLs yang ditandai untuk dihapus
     if urls_to_remove:
         for idx in sorted(urls_to_remove, reverse=True):
             st.session_state.url_inputs.pop(idx)
         st.rerun()
     
-    # Button untuk add URL baru
     col_add1, col_add2 = st.columns([2, 2])
     with col_add1:
         if st.button("➕ Tambah URL", use_container_width=True):
@@ -292,7 +301,6 @@ with st.sidebar:
             st.rerun()
     
     st.caption(f"Total: {len(st.session_state.url_inputs)} URL")
-    
     st.markdown("---")
     
     col1, col2 = st.columns(2)
@@ -302,21 +310,14 @@ with st.sidebar:
         clear_btn = st.button("🗑️ Clear Cache", use_container_width=True)
     
     if clear_btn:
-        # Clear semua data yang di-load, tapi URL tetap
-        if "df" in st.session_state:
-            del st.session_state["df"]
-        if "load_results" in st.session_state:
-            del st.session_state["load_results"]
-        if "dedup_info" in st.session_state:
-            del st.session_state["dedup_info"]
-        if "last_load" in st.session_state:
-            del st.session_state["last_load"]
-        st.success("✅ Cache cleared! URL masih tersimpan.")
+        for key in ["df", "load_results", "dedup_info", "last_load"]:
+            if key in st.session_state:
+                del st.session_state[key]
+        st.success("✅ Cache cleared!")
         st.rerun()
     
     st.markdown("---")
     
-    # Status last load
     if st.session_state.get("last_load"):
         st.success(f"✅ Last Load: {st.session_state['last_load'].strftime('%H:%M:%S')}")
     
@@ -325,142 +326,92 @@ with st.sidebar:
     with st.expander("📖 Cara Pakai"):
         st.markdown("""
         **1. Tambah URL:**
-        - Klik "➕ Tambah URL" untuk menambah input baru
-        - Setiap URL akan punya kolom sendiri
+        - Klik "➕ Tambah URL"
         
-        **2. Ambil URL dengan GID:**
+        **2. Copy URL dengan GID:**
         - Buka Google Sheets
-        - Klik tab sheet yang ingin diambil
-        - Copy URL dari browser (sudah ada #gid=xxx)
-        - Paste di kolom URL
+        - Klik tab sheet yang diinginkan
+        - Copy URL (sudah ada #gid=xxx)
         
-        **3. Hapus URL:**
-        - Klik 🗑️ di sebelah URL untuk menghapus
+        **3. Permission:**
+        - Share → Anyone with link → Viewer
         
         **4. Load Data:**
-        - Klik tombol "🔄 Load Data" untuk refresh
-        - URL akan tetap tersimpan
-        - Tidak ada auto refresh
-        
-        **5. Deduplikasi Otomatis:**
-        - Sistem otomatis hapus data duplikat
-        - Prioritas: Data yang **sudah ada status**
-        - Base on: `Trans. ID`
-        
-        **6. Permission:**
-        - Share → Anyone with link → Viewer
+        - Klik "🔄 Load Data"
         """)
-    
-    with st.expander("🎯 Prioritas Status"):
-        st.markdown("""
-        Jika ada data sama (Trans. ID sama) di beberapa sheet, sistem akan ambil yang:
-        
-        1. ✅ **Selesai** (prioritas tertinggi)
-        2. ⚙️ **Sedang Diproses**
-        3. 🔄 **Revisi**
-        4. 📄 **Kurang BAPP**
-        5. ⚠️ **Data Bermasalah**
-        6. ⏳ **Belum Dikerjakan** (prioritas terendah)
-        """)
-    
-    st.info("💡 Refresh manual aja - klik tombol Load Data")
 
 # ======================================================
 # MAIN - LOAD DATA
 # ======================================================
-# Get clean URL list dari session state
 url_list = [url.strip() for url in st.session_state.url_inputs if url.strip()]
 
 if not url_list:
     st.info("👆 Masukkan minimal 1 URL di sidebar")
     st.stop()
 
-# Show URLs yang akan diload
 with st.expander(f"📋 URL yang tersimpan ({len(url_list)} sheet)"):
     for i, url in enumerate(url_list, 1):
         sheet_id, gid = extract_sheet_id_and_gid(url)
         if sheet_id:
             st.success(f"{i}. Sheet ID: `{sheet_id}` | GID: `{gid}`")
         else:
-            st.error(f"{i}. ❌ URL tidak valid: {url[:50]}...")
+            st.error(f"{i}. ❌ URL tidak valid")
 
-# MANUAL LOAD ONLY
 if load_btn:
-    with st.spinner("⏳ Memuat data dari semua sheet..."):
-        df, load_results, dedup_info = load_multiple_sheets(url_list)
+    with st.spinner("⏳ Memuat data..."):
+        df, load_results, _ = load_multiple_sheets(url_list)
         
-        # Show load results
         st.markdown("### 📊 Hasil Loading")
         result_df = pd.DataFrame(load_results)
         st.dataframe(result_df, use_container_width=True, hide_index=True)
         
         if df is None:
-            st.error("❌ Semua sheet gagal dimuat. Periksa URL dan permission!")
+            st.error("❌ Semua sheet gagal dimuat!")
             st.stop()
         
-        # Show dedup info
-        if dedup_info:
-            st.success(f"✅ Data berhasil dimuat!")
-            
-            col_d1, col_d2, col_d3 = st.columns(3)
-            col_d1.metric("📥 Data Awal", f"{dedup_info['before']:,}")
-            col_d2.metric("🗑️ Duplikat Dihapus", f"{dedup_info['removed']:,}")
-            col_d3.metric("✅ Data Final", f"{dedup_info['after']:,}")
-            
-            if dedup_info['removed'] > 0:
-                st.info(f"💡 Ditemukan {dedup_info['duplicates_found']:,} data duplikat. Sistem otomatis pilih yang sudah ada status.")
-        
-        # Simpan ke session state
-        st.session_state["df"] = df
+        st.session_state["df_raw"] = df.copy()
         st.session_state["load_results"] = load_results
-        st.session_state["dedup_info"] = dedup_info
         st.session_state["last_load"] = datetime.now()
+        st.success(f"✅ Data berhasil dimuat: {len(df):,} baris")
 
-df = st.session_state.get("df")
+df = st.session_state.get("df_raw")
 if df is None:
-    st.warning("⚠️ Klik tombol '🔄 Load Data' di sidebar untuk memuat data")
+    st.warning("⚠️ Klik tombol '🔄 Load Data' di sidebar")
     st.stop()
 
-dedup_info = st.session_state.get("dedup_info", {})
-
 # ======================================================
-# INFO BOXES
+# COLUMN MAPPING & VALIDATION
 # ======================================================
 st.markdown("---")
-col_info1, col_info2, col_info3, col_info4 = st.columns(4)
+st.markdown("### 🔧 Deteksi & Mapping Kolom")
 
-col_info1.metric("📋 Total Data", f"{len(df):,}")
-col_info2.metric("📑 Sheet Loaded", len(url_list))
-if dedup_info:
-    col_info3.metric("🗑️ Duplikat Removed", f"{dedup_info.get('removed', 0):,}")
-if "last_load" in st.session_state:
-    col_info4.metric("🕐 Last Load", st.session_state["last_load"].strftime("%H:%M:%S"))
+# Cari kolom dengan berbagai variasi nama
+trans_id_col = find_column(df, ["trans. id", "trans id", "transid", "trans_id", "id transaksi", "id"])
+nama_col = find_column(df, ["nama", "name", "sekolah", "nama sekolah"])
+jenjang_col = find_column(df, ["jenjang", "level", "tingkat", "jenjang pendidikan"])
+kabupaten_col = find_column(df, ["kabupaten", "kab", "regency", "kab/kota", "kabupaten/kota"])
+propinsi_col = find_column(df, ["propinsi", "provinsi", "province", "prov"])
+npsn_col = find_column(df, ["npsn"])
+status_col = find_column(df, ["status_text", "status text", "status", "status pengerjaan", "keterangan"])
 
-# ======================================================
-# VALIDASI KOLOM
-# ======================================================
-# Mapping nama kolom (case insensitive)
-def find_column(df, possible_names):
-    """Cari kolom dengan case-insensitive"""
-    df_cols_lower = {col.lower(): col for col in df.columns}
-    for name in possible_names:
-        if name.lower() in df_cols_lower:
-            return df_cols_lower[name.lower()]
-    return None
+# Show detection results
+with st.expander("🔍 Hasil Deteksi Kolom (Klik untuk lihat detail)"):
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write("**Kolom yang ditemukan:**")
+        st.write(f"- Trans ID: `{trans_id_col if trans_id_col else '❌ TIDAK DITEMUKAN'}`")
+        st.write(f"- Nama: `{nama_col if nama_col else '❌ TIDAK DITEMUKAN'}`")
+        st.write(f"- Jenjang: `{jenjang_col if jenjang_col else '❌ TIDAK DITEMUKAN'}`")
+        st.write(f"- Kabupaten: `{kabupaten_col if kabupaten_col else '❌ TIDAK DITEMUKAN'}`")
+        st.write(f"- Propinsi: `{propinsi_col if propinsi_col else '❌ TIDAK DITEMUKAN'}`")
+        st.write(f"- NPSN: `{npsn_col if npsn_col else '❌ TIDAK DITEMUKAN'}`")
+        st.write(f"- Status: `{status_col if status_col else '❌ TIDAK DITEMUKAN'}`")
+    
+    with col2:
+        st.write("**Semua kolom di spreadsheet:**")
+        st.dataframe(pd.DataFrame({"Nama Kolom": df.columns.tolist()}), use_container_width=True, height=300)
 
-# Cari kolom dengan berbagai variasi nama - DISESUAIKAN DENGAN SPREADSHEET
-trans_id_col = find_column(df, ["trans. id", "Trans. ID", "trans id", "transid", "trans_id"])
-nama_col = find_column(df, ["nama", "Nama", "name", "sekolah"])
-jenjang_col = find_column(df, ["jenjang", "Jenjang", "level", "tingkat"])
-kabupaten_col = find_column(df, ["kabupaten", "Kabupaten", "kab", "regency"])
-propinsi_col = find_column(df, ["propinsi", "Propinsi", "provinsi", "province", "prov"])
-npsn_col = find_column(df, ["npsn", "NPSN"])
-status_col = find_column(df, ["Status_Text", "status_text", "status text", "status"])
-
-# Debug: Tampilkan kolom yang ditemukan
-st.info(f"🔍 Debug - Kolom ditemukan: trans_id={trans_id_col}, nama={nama_col}, jenjang={jenjang_col}, kabupaten={kabupaten_col}, propinsi={propinsi_col}, npsn={npsn_col}, status={status_col}")
-
-# Rename kolom ke format standar
+# Rename columns
 column_mapping = {}
 if trans_id_col: column_mapping[trans_id_col] = "Trans. ID"
 if nama_col: column_mapping[nama_col] = "Nama"
@@ -470,47 +421,52 @@ if propinsi_col: column_mapping[propinsi_col] = "Propinsi"
 if npsn_col: column_mapping[npsn_col] = "NPSN"
 if status_col: column_mapping[status_col] = "Status_Text"
 
-df = df.rename(columns=column_mapping)
-
-# Validasi kolom wajib
-required_columns = ["Trans. ID", "Nama", "Jenjang", "Kabupaten", "Propinsi", "NPSN"]
-
-if "Status_Text" not in df.columns:
-    st.error("❌ Kolom 'Status_Text' tidak ditemukan!")
-    st.warning("⚠️ Jalankan Apps Script dulu untuk generate kolom Status_Text")
-    with st.expander("🔍 Lihat kolom tersedia"):
-        st.write("Kolom di DataFrame:")
-        st.write(df.columns.tolist())
+if column_mapping:
+    df = df.rename(columns=column_mapping)
+    st.success(f"✅ {len(column_mapping)} kolom berhasil di-rename")
+else:
+    st.error("❌ Tidak ada kolom yang berhasil di-detect!")
     st.stop()
 
+# Validate required columns
+required_columns = ["Trans. ID", "Nama", "Jenjang", "Kabupaten", "Propinsi", "NPSN", "Status_Text"]
 missing = [c for c in required_columns if c not in df.columns]
+
 if missing:
-    st.error(f"❌ Kolom tidak ditemukan: {', '.join(missing)}")
-    with st.expander("🔍 Lihat kolom tersedia"):
-        st.write("Kolom di DataFrame:")
-        st.write(df.columns.tolist())
-        st.write("\nMapping yang berhasil:")
-        st.write(column_mapping)
+    st.error(f"❌ Kolom wajib tidak ditemukan: **{', '.join(missing)}**")
+    st.warning("⚠️ Periksa nama kolom di spreadsheet atau tambahkan kolom yang hilang")
+    
+    with st.expander("💡 Solusi"):
+        st.markdown("""
+        **Kolom yang dibutuhkan:**
+        1. Trans. ID (ID Transaksi)
+        2. Nama (Nama Sekolah)
+        3. Jenjang
+        4. Kabupaten
+        5. Propinsi
+        6. NPSN
+        7. Status_Text (Kolom status pengerjaan)
+        
+        **Jika kolom Status_Text tidak ada:**
+        - Buat kolom baru bernama "Status_Text" atau "Status"
+        - Atau jalankan Apps Script untuk auto-generate
+        """)
     st.stop()
 
-# Optional columns - DISESUAIKAN
-optional_columns = ["keterangan", "petugas", "pic", "telp", "alamat", "catatan", "resi pengiriman", "serial number"]
-display_columns = ["__source", "Trans. ID", "Nama", "Jenjang", "Kabupaten", "Propinsi", "NPSN", "Status_Text"]
+# Deduplicate AFTER rename
+df, dedup_info = deduplicate_data(df)
 
-# Cari optional columns (case insensitive)
-for opt_col in optional_columns:
-    found_col = find_column(df, [opt_col, opt_col.title(), opt_col.upper()])
-    if found_col and found_col not in display_columns:
-        display_columns.append(found_col)
+if dedup_info:
+    col_d1, col_d2, col_d3 = st.columns(3)
+    col_d1.metric("📥 Data Awal", f"{dedup_info['before']:,}")
+    col_d2.metric("🗑️ Duplikat Removed", f"{dedup_info['removed']:,}")
+    col_d3.metric("✅ Data Final", f"{dedup_info['after']:,}")
 
-# ======================================================
-# PROCESS STATUS
-# ======================================================
-if "Status_Category" not in df.columns:
-    df["Status_Category"] = df["Status_Text"].apply(normalize_status)
+st.session_state["df"] = df
+st.session_state["dedup_info"] = dedup_info
 
 # ======================================================
-# METRICS - UPDATED dengan Revisi
+# METRICS
 # ======================================================
 st.markdown("---")
 st.markdown('<div class="section-header"><h3>📈 Ringkasan Status</h3></div>', unsafe_allow_html=True)
@@ -524,63 +480,53 @@ total_bapp = (df.Status_Category == "Kurang BAPP").sum()
 total_selesai = (df.Status_Category == "Selesai").sum()
 total_bermasalah = (df.Status_Category == "Data Bermasalah").sum()
 
-c1.metric("⏳ BELUM", total_belum, 
-          delta=f"{(total_belum/len(df)*100):.1f}%" if len(df) > 0 else "0%")
-c2.metric("⚙️ PROSES", total_proses,
-          delta=f"{(total_proses/len(df)*100):.1f}%" if len(df) > 0 else "0%")
-c3.metric("🔄 REVISI", total_revisi,
-          delta=f"{(total_revisi/len(df)*100):.1f}%" if len(df) > 0 else "0%")
-c4.metric("📄 KURANG BAPP", total_bapp,
-          delta=f"{(total_bapp/len(df)*100):.1f}%" if len(df) > 0 else "0%")
-c5.metric("✅ SELESAI", total_selesai,
-          delta=f"{(total_selesai/len(df)*100):.1f}%" if len(df) > 0 else "0%")
-c6.metric("⚠️ BERMASALAH", total_bermasalah,
-          delta=f"{(total_bermasalah/len(df)*100):.1f}%" if len(df) > 0 else "0%")
+c1.metric("⏳ BELUM", total_belum, f"{(total_belum/len(df)*100):.1f}%")
+c2.metric("⚙️ PROSES", total_proses, f"{(total_proses/len(df)*100):.1f}%")
+c3.metric("🔄 REVISI", total_revisi, f"{(total_revisi/len(df)*100):.1f}%")
+c4.metric("📄 KURANG BAPP", total_bapp, f"{(total_bapp/len(df)*100):.1f}%")
+c5.metric("✅ SELESAI", total_selesai, f"{(total_selesai/len(df)*100):.1f}%")
+c6.metric("⚠️ BERMASALAH", total_bermasalah, f"{(total_bermasalah/len(df)*100):.1f}%")
 
-# Progress bar
-total = len(df)
-if total > 0:
-    progress_pct = (total_selesai / total) * 100
-    st.progress(total_selesai / total)
-    st.markdown(f"**🎯 Progress Keseluruhan:** {progress_pct:.1f}% ({total_selesai:,} dari {total:,} sekolah)")
+if len(df) > 0:
+    progress_pct = (total_selesai / len(df)) * 100
+    st.progress(total_selesai / len(df))
+    st.markdown(f"**🎯 Progress: {progress_pct:.1f}% ({total_selesai:,}/{len(df):,})**")
 
 # ======================================================
-# FILTER - UPDATED dengan Revisi
+# FILTER
 # ======================================================
 st.markdown("---")
 st.markdown("### 🔎 Filter Data")
 
-col_filter1, col_filter2, col_filter3 = st.columns(3)
+col_f1, col_f2, col_f3 = st.columns(3)
 
-with col_filter1:
+with col_f1:
     status_filter = st.selectbox(
         "📊 Status",
         ["Semua Status", "Belum Dikerjakan", "Sedang Diproses", "Revisi", "Kurang BAPP", "Selesai", "Data Bermasalah"]
     )
 
-with col_filter2:
+with col_f2:
     if "__source" in df.columns:
         source_list = ["Semua Source"] + sorted(df["__source"].unique().tolist())
-        source_filter = st.selectbox("📑 Source Sheet", source_list)
+        source_filter = st.selectbox("📑 Source", source_list)
     else:
         source_filter = "Semua Source"
 
-with col_filter3:
-    search_text = st.text_input("🔍 Cari (Nama/NPSN/Kabupaten)", "")
+with col_f3:
+    search_text = st.text_input("🔍 Cari", "")
 
-# Apply filters
 filtered_df = df.copy()
 
 if status_filter != "Semua Status":
     filtered_df = filtered_df[filtered_df["Status_Category"] == status_filter]
 
-if source_filter != "Semua Source" and "__source" in filtered_df.columns:
+if source_filter != "Semua Source":
     filtered_df = filtered_df[filtered_df["__source"] == source_filter]
 
 if search_text:
-    search_cols = ["Nama", "NPSN", "Kabupaten"]
     mask = pd.Series([False] * len(filtered_df))
-    for col in search_cols:
+    for col in ["Nama", "NPSN", "Kabupaten"]:
         if col in filtered_df.columns:
             mask = mask | filtered_df[col].astype(str).str.contains(search_text, case=False, na=False)
     filtered_df = filtered_df[mask]
@@ -593,8 +539,9 @@ st.markdown(f"**Menampilkan {len(filtered_df):,} dari {len(df):,} baris**")
 st.markdown("---")
 st.markdown('<div class="section-header"><h3>📋 Data Detail</h3></div>', unsafe_allow_html=True)
 
+display_columns = ["__source", "Trans. ID", "Nama", "Jenjang", "Kabupaten", "Propinsi", "NPSN", "Status_Text"]
+
 def style_status_cell(val):
-    """Style untuk kolom status"""
     cat = normalize_status(val)
     color = get_status_color(cat)
     return f"background-color:{color};color:white;font-weight:600;padding:8px;border-radius:5px;text-align:center;"
@@ -609,7 +556,7 @@ if not filtered_df.empty:
         height=500
     )
 else:
-    st.warning("⚠️ Tidak ada data yang sesuai dengan filter")
+    st.warning("⚠️ Tidak ada data")
 
 # ======================================================
 # DOWNLOAD
@@ -621,71 +568,21 @@ timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
 with col_dl1:
     st.download_button(
-        "📥 Download Hasil Filter (CSV)",
+        "📥 Download Filter (CSV)",
         filtered_df.to_csv(index=False).encode('utf-8'),
-        f"monitoring_filtered_{timestamp}.csv",
+        f"filtered_{timestamp}.csv",
         "text/csv",
         use_container_width=True
     )
 
 with col_dl2:
     st.download_button(
-        "📥 Download Semua Data (CSV)",
+        "📥 Download All (CSV)",
         df.to_csv(index=False).encode('utf-8'),
-        f"monitoring_all_{timestamp}.csv",
+        f"all_{timestamp}.csv",
         "text/csv",
         use_container_width=True
     )
-
-# ======================================================
-# ANALYTICS - UPDATED dengan Revisi
-# ======================================================
-st.markdown("---")
-with st.expander("📊 **Analytics & Breakdown**"):
-    
-    tab1, tab2, tab3 = st.tabs(["📈 Per Source", "🔍 Deduplikasi Info", "📋 Summary"])
-    
-    with tab1:
-        if "__source" in df.columns:
-            st.subheader("Status per Source Sheet")
-            source_summary = df.groupby(["__source", "Status_Category"]).size().reset_index(name="Jumlah")
-            pivot_summary = source_summary.pivot(index="__source", columns="Status_Category", values="Jumlah").fillna(0).astype(int)
-            pivot_summary["TOTAL"] = pivot_summary.sum(axis=1)
-            st.dataframe(pivot_summary, use_container_width=True)
-    
-    with tab2:
-        st.subheader("🔍 Informasi Deduplikasi")
-        if dedup_info:
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Data Awal (Sebelum Dedup)", f"{dedup_info['before']:,}")
-                st.metric("Data Duplikat Ditemukan", f"{dedup_info['duplicates_found']:,}")
-            with col2:
-                st.metric("Data Final (Setelah Dedup)", f"{dedup_info['after']:,}")
-                st.metric("Data yang Dihapus", f"{dedup_info['removed']:,}")
-            
-            st.info("💡 Sistem otomatis memilih data dengan status terbaik (prioritas: Selesai → Proses → Revisi → BAPP → Bermasalah → Belum)")
-    
-    with tab3:
-        st.subheader("📋 Summary Keseluruhan")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("**Status Distribution**")
-            for status in ["Selesai", "Sedang Diproses", "Revisi", "Kurang BAPP", "Data Bermasalah", "Belum Dikerjakan"]:
-                count = (df["Status_Category"] == status).sum()
-                pct = (count/len(df)*100) if len(df) > 0 else 0
-                emoji = get_status_emoji(status)
-                st.metric(f"{emoji} {status}", f"{count:,}", f"{pct:.1f}%")
-        
-        with col2:
-            st.markdown("**Data Sources**")
-            if "__source" in df.columns:
-                source_counts = df["__source"].value_counts()
-                for source, count in source_counts.items():
-                    pct = (count/len(df)*100)
-                    st.metric(source, f"{count:,}", f"{pct:.1f}%")
 
 # ======================================================
 # FOOTER
@@ -693,7 +590,6 @@ with st.expander("📊 **Analytics & Breakdown**"):
 st.markdown("---")
 st.markdown("""
 <div class='dashboard-footer'>
-    <p>🚀 Dashboard Monitoring v5.3 • Multi-Sheet GID • Smart Deduplication • Manual Refresh</p>
-    <p style='font-size:0.8rem; color:#999;'>Powered by Streamlit | URL Persistent • Refresh Manual • Updated with Revisi Status</p>
+    <p>🚀 Dashboard v5.4 • Fixed Column Detection • Smart Deduplication</p>
 </div>
 """, unsafe_allow_html=True)
