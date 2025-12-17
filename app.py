@@ -480,12 +480,12 @@ total_bapp = (df.Status_Category == "Kurang BAPP").sum()
 total_selesai = (df.Status_Category == "Selesai").sum()
 total_bermasalah = (df.Status_Category == "Data Bermasalah").sum()
 
-c1.metric("⏳ BELUM", total_belum, f"{(total_belum/len(df)*100):.1f}%")
-c2.metric("⚙️ PROSES", total_proses, f"{(total_proses/len(df)*100):.1f}%")
-c3.metric("🔄 ON CHECK", total_revisi, f"{(total_revisi/len(df)*100):.1f}%")
-c4.metric("📄 KURANG BAPP", total_bapp, f"{(total_bapp/len(df)*100):.1f}%")
-c5.metric("✅ SELESAI", total_selesai, f"{(total_selesai/len(df)*100):.1f}%")
-c6.metric("⚠️ BERMASALAH", total_bermasalah, f"{(total_bermasalah/len(df)*100):.1f}%")
+c1.metric("⏳ NOT CHECKED / BELUM DICEK", total_belum, f"{(total_belum/len(df)*100):.1f}%")
+c2.metric("⚙️ PROSES / ALREADY FOLLOWED UP TO THE CORDINATOR", total_proses, f"{(total_proses/len(df)*100):.1f}%")
+c3.metric("🔄 ON CHECK / SUDAH DICEK", total_revisi, f"{(total_revisi/len(df)*100):.1f}%")
+c4.metric("📄 KURANG BAPP / BAPP DATA LACK", total_bapp, f"{(total_bapp/len(df)*100):.1f}%")
+c5.metric("✅ SELESAI / DONE", total_selesai, f"{(total_selesai/len(df)*100):.1f}%")
+c6.metric("⚠️ CONSTRAINED DATA / BERMASALAH", total_bermasalah, f"{(total_bermasalah/len(df)*100):.1f}%")
 
 if len(df) > 0:
     progress_pct = (total_selesai / len(df)) * 100
