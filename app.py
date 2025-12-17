@@ -165,7 +165,7 @@ def get_status_color(status):
     colors = {
         "Belum Dikerjakan": "#94a3b8",
         "Sedang Diproses": "#f59e0b",
-        "Revisi": "#9333ea",  # Ungu/Purple
+        "Revisi": "#ff00ff",  # Magenta/Pink
         "Kurang BAPP": "#00ffff",  # Cyan
         "Selesai": "#10b981",
         "Data Bermasalah": "#ef4444"
