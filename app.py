@@ -439,27 +439,69 @@ if "last_load" in st.session_state:
 # ======================================================
 # VALIDASI KOLOM
 # ======================================================
+# Mapping nama kolom (case insensitive)
+def find_column(df, possible_names):
+    """Cari kolom dengan case-insensitive"""
+    df_cols_lower = {col.lower(): col for col in df.columns}
+    for name in possible_names:
+        if name.lower() in df_cols_lower:
+            return df_cols_lower[name.lower()]
+    return None
+
+# Cari kolom dengan berbagai variasi nama - DISESUAIKAN DENGAN SPREADSHEET
+trans_id_col = find_column(df, ["trans. id", "Trans. ID", "trans id", "transid", "trans_id"])
+nama_col = find_column(df, ["nama", "Nama", "name", "sekolah"])
+jenjang_col = find_column(df, ["jenjang", "Jenjang", "level", "tingkat"])
+kabupaten_col = find_column(df, ["kabupaten", "Kabupaten", "kab", "regency"])
+propinsi_col = find_column(df, ["propinsi", "Propinsi", "provinsi", "province", "prov"])
+npsn_col = find_column(df, ["npsn", "NPSN"])
+status_col = find_column(df, ["Status_Text", "status_text", "status text", "status"])
+
+# Debug: Tampilkan kolom yang ditemukan
+st.info(f"🔍 Debug - Kolom ditemukan: trans_id={trans_id_col}, nama={nama_col}, jenjang={jenjang_col}, kabupaten={kabupaten_col}, propinsi={propinsi_col}, npsn={npsn_col}, status={status_col}")
+
+# Rename kolom ke format standar
+column_mapping = {}
+if trans_id_col: column_mapping[trans_id_col] = "Trans. ID"
+if nama_col: column_mapping[nama_col] = "Nama"
+if jenjang_col: column_mapping[jenjang_col] = "Jenjang"
+if kabupaten_col: column_mapping[kabupaten_col] = "Kabupaten"
+if propinsi_col: column_mapping[propinsi_col] = "Propinsi"
+if npsn_col: column_mapping[npsn_col] = "NPSN"
+if status_col: column_mapping[status_col] = "Status_Text"
+
+df = df.rename(columns=column_mapping)
+
+# Validasi kolom wajib
 required_columns = ["Trans. ID", "Nama", "Jenjang", "Kabupaten", "Propinsi", "NPSN"]
 
 if "Status_Text" not in df.columns:
     st.error("❌ Kolom 'Status_Text' tidak ditemukan!")
     st.warning("⚠️ Jalankan Apps Script dulu untuk generate kolom Status_Text")
+    with st.expander("🔍 Lihat kolom tersedia"):
+        st.write("Kolom di DataFrame:")
+        st.write(df.columns.tolist())
     st.stop()
 
 missing = [c for c in required_columns if c not in df.columns]
 if missing:
     st.error(f"❌ Kolom tidak ditemukan: {', '.join(missing)}")
-    with st.expander("Lihat kolom tersedia"):
+    with st.expander("🔍 Lihat kolom tersedia"):
+        st.write("Kolom di DataFrame:")
         st.write(df.columns.tolist())
+        st.write("\nMapping yang berhasil:")
+        st.write(column_mapping)
     st.stop()
 
-# Optional columns
-optional_columns = ["Keterangan", "Petugas", "PIC", "Telp", "Alamat"]
-display_columns = ["__source"] + required_columns + ["Status_Text"]
+# Optional columns - DISESUAIKAN
+optional_columns = ["keterangan", "petugas", "pic", "telp", "alamat", "catatan", "resi pengiriman", "serial number"]
+display_columns = ["__source", "Trans. ID", "Nama", "Jenjang", "Kabupaten", "Propinsi", "NPSN", "Status_Text"]
 
-for col in optional_columns:
-    if col in df.columns:
-        display_columns.append(col)
+# Cari optional columns (case insensitive)
+for opt_col in optional_columns:
+    found_col = find_column(df, [opt_col, opt_col.title(), opt_col.upper()])
+    if found_col and found_col not in display_columns:
+        display_columns.append(found_col)
 
 # ======================================================
 # PROCESS STATUS
