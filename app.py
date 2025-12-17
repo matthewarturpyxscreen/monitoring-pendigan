@@ -482,7 +482,7 @@ total_bermasalah = (df.Status_Category == "Data Bermasalah").sum()
 
 c1.metric("⏳ BELUM", total_belum, f"{(total_belum/len(df)*100):.1f}%")
 c2.metric("⚙️ PROSES", total_proses, f"{(total_proses/len(df)*100):.1f}%")
-c3.metric("🔄 REVISI", total_revisi, f"{(total_revisi/len(df)*100):.1f}%")
+c3.metric("🔄 ON CHECK", total_revisi, f"{(total_revisi/len(df)*100):.1f}%")
 c4.metric("📄 KURANG BAPP", total_bapp, f"{(total_bapp/len(df)*100):.1f}%")
 c5.metric("✅ SELESAI", total_selesai, f"{(total_selesai/len(df)*100):.1f}%")
 c6.metric("⚠️ BERMASALAH", total_bermasalah, f"{(total_bermasalah/len(df)*100):.1f}%")
