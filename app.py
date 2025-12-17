@@ -707,4 +707,109 @@ if len(df) > 0:
 # ======================================================
 st.markdown('<div class="section-header"><h3>🔎 Filter Data</h3></div>', unsafe_allow_html=True)
 
-col_f1, col_f2, col_f
+col_f1, col_f2, col_f3 = st.columns(3)
+
+with col_f1:
+    status_filter = st.selectbox(
+        "📊 Status",
+        ["Semua Status", "Belum Dikerjakan", "Sedang Diproses", "Revisi", "Kurang BAPP", "Selesai", "Data Bermasalah"]
+    )
+
+with col_f2:
+    if "__source" in df.columns:
+        source_list = ["Semua Source"] + sorted(df["__source"].unique().tolist())
+        source_filter = st.selectbox("📑 Source", source_list)
+    else:
+        source_filter = "Semua Source"
+
+with col_f3:
+    search_text = st.text_input("🔍 Cari Nama/NPSN/Kabupaten", "")
+
+filtered_df = df.copy()
+
+if status_filter != "Semua Status":
+    filtered_df = filtered_df[filtered_df["Status_Category"] == status_filter]
+
+if source_filter != "Semua Source":
+    filtered_df = filtered_df[filtered_df["__source"] == source_filter]
+
+if search_text:
+    mask = pd.Series([False] * len(filtered_df))
+    for col in ["Nama", "NPSN", "Kabupaten"]:
+        if col in filtered_df.columns:
+            mask = mask | filtered_df[col].astype(str).str.contains(search_text, case=False, na=False)
+    filtered_df = filtered_df[mask]
+
+st.markdown(f"""
+<div class='stats-badge' style='background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);'>
+    📊 Menampilkan {len(filtered_df):,} dari {len(df):,} baris
+</div>
+""", unsafe_allow_html=True)
+
+# ======================================================
+# TABLE
+# ======================================================
+st.markdown('<div class="section-header"><h3>📋 Data Detail</h3></div>', unsafe_allow_html=True)
+
+display_columns = ["__source", "Trans. ID", "Nama", "Jenjang", "Kabupaten", "Propinsi", "NPSN", "Status_Text"]
+
+def style_status_cell(val):
+    cat = normalize_status(val)
+    color = get_status_color(cat)
+    return f"background-color:{color};color:white;font-weight:600;padding:8px;border-radius:5px;text-align:center;"
+
+if not filtered_df.empty:
+    st.dataframe(
+        filtered_df[display_columns].style.applymap(
+            style_status_cell,
+            subset=["Status_Text"]
+        ),
+        use_container_width=True,
+        height=500
+    )
+else:
+    st.warning("⚠️ Tidak ada data yang sesuai dengan filter")
+
+# ======================================================
+# DOWNLOAD
+# ======================================================
+st.markdown('<div class="section-header"><h3>📥 Download Data</h3></div>', unsafe_allow_html=True)
+
+timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+col_dl1, col_dl2, col_dl3 = st.columns([2, 2, 2])
+
+with col_dl1:
+    st.download_button(
+        "📥 Download Data Terfilter",
+        filtered_df.to_csv(index=False).encode('utf-8'),
+        f"filtered_{timestamp}.csv",
+        "text/csv",
+        use_container_width=True
+    )
+
+with col_dl2:
+    st.download_button(
+        "📥 Download Semua Data",
+        df.to_csv(index=False).encode('utf-8'),
+        f"all_{timestamp}.csv",
+        "text/csv",
+        use_container_width=True
+    )
+
+with col_dl3:
+    if not filtered_df.empty:
+        excel_buffer = pd.ExcelWriter(f"data_{timestamp}.xlsx", engine='xlsxwriter')
+        filtered_df.to_excel(excel_buffer, index=False, sheet_name='Data')
+        excel_buffer.close()
+
+# ======================================================
+# FOOTER
+# ======================================================
+st.markdown("""
+<div class='dashboard-footer'>
+    <h4>🚀 Dashboard Monitoring v5.4</h4>
+    <p>Fixed Column Detection • Smart Deduplication • Multi-Sheet Support</p>
+    <p style='font-size: 0.9rem; margin-top: 1rem;'>Developed with ❤️ using Streamlit</p>
+</div>
+""", unsafe_allow_html=True)
