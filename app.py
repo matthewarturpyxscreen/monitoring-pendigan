@@ -19,9 +19,6 @@ st.cache_data.clear()
 # HELPER FUNCTIONS
 # ======================================================
 def normalize_status(val):
-    """
-    NORMALISASI KE 2 STATUS SAJA
-    """
     if pd.isna(val) or str(val).strip() == "":
         return "Belum Dikerjakan"
 
@@ -32,40 +29,28 @@ def normalize_status(val):
 
 
 def get_status_priority(status):
+    return 1 if status == "Selesai" else 2
+
+
+def load_sheet_by_gid(base_url, gid):
     """
-    PRIORITAS UNTUK DEDUP
+    LOAD SATU TAB BERDASARKAN GID
     """
-    priority = {
-        "Selesai": 1,
-        "Belum Dikerjakan": 2
-    }
-    return priority.get(status, 99)
+    try:
+        csv_url = f"{base_url}/export?format=csv&gid={gid}"
+        res = requests.get(csv_url, timeout=20)
 
+        if res.status_code != 200:
+            st.warning(f"Gagal load gid {gid} (HTTP {res.status_code})")
+            return None
 
-def get_status_color(status):
-    return "#10b981" if status == "Selesai" else "#94a3b8"
+        df = pd.read_csv(BytesIO(res.content))
+        df["__gid__"] = gid
+        return df
 
-
-def get_status_emoji(status):
-    return "✅" if status == "Selesai" else "⏳"
-
-
-def load_google_sheet(sheet_url):
-    """
-    LOAD GOOGLE SHEET KE DATAFRAME
-    """
-    if "docs.google.com" not in sheet_url:
-        st.error("URL Google Sheet tidak valid")
+    except Exception as e:
+        st.warning(f"Error gid {gid}: {e}")
         return None
-
-    csv_url = sheet_url.replace("/edit", "/export?format=csv")
-    response = requests.get(csv_url)
-
-    if response.status_code != 200:
-        st.error("Gagal mengambil data dari Google Sheet")
-        return None
-
-    return pd.read_csv(BytesIO(response.content))
 
 
 # ======================================================
@@ -73,9 +58,14 @@ def load_google_sheet(sheet_url):
 # ======================================================
 st.sidebar.title("⚙️ Pengaturan")
 
-sheet_url = st.sidebar.text_input(
-    "🔗 Google Sheet URL",
-    placeholder="https://docs.google.com/spreadsheets/..."
+base_url = st.sidebar.text_input(
+    "🔗 Google Sheet URL (tanpa /edit)",
+    placeholder="https://docs.google.com/spreadsheets/d/FILE_ID"
+)
+
+gid_input = st.sidebar.text_input(
+    "📄 Daftar GID (pisahkan koma)",
+    placeholder="0,123456789,987654321"
 )
 
 status_filter = st.sidebar.selectbox(
@@ -83,25 +73,35 @@ status_filter = st.sidebar.selectbox(
     ["Semua Status", "Belum Dikerjakan", "Selesai"]
 )
 
-refresh = st.sidebar.button("🔄 Refresh Data")
-
 # ======================================================
-# LOAD DATA
+# LOAD DATA MULTI GID
 # ======================================================
-if sheet_url:
-    with st.spinner("⏳ Mengambil data..."):
-        df = load_google_sheet(sheet_url)
+if base_url and gid_input:
+    gids = [g.strip() for g in gid_input.split(",") if g.strip().isdigit()]
 
-    if df is None or df.empty:
+    if not gids:
+        st.error("❌ GID tidak valid")
         st.stop()
 
+    with st.spinner("⏳ Mengambil data dari semua GID..."):
+        df_list = []
+        for gid in gids:
+            df_part = load_sheet_by_gid(base_url, gid)
+            if df_part is not None and not df_part.empty:
+                df_list.append(df_part)
+
+    if not df_list:
+        st.error("❌ Tidak ada data yang berhasil dimuat")
+        st.stop()
+
+    df = pd.concat(df_list, ignore_index=True)
+
     # ==================================================
-    # VALIDASI KOLOM WAJIB
+    # VALIDASI KOLOM
     # ==================================================
-    required_cols = ["NPSN", "Status_Text"]
-    for col in required_cols:
+    for col in ["NPSN", "Status_Text"]:
         if col not in df.columns:
-            st.error(f"Kolom wajib tidak ditemukan: {col}")
+            st.error(f"❌ Kolom wajib tidak ditemukan: {col}")
             st.stop()
 
     # ==================================================
@@ -111,7 +111,7 @@ if sheet_url:
     df["Priority"] = df["Status_Category"].apply(get_status_priority)
 
     # ==================================================
-    # DEDUP BERDASARKAN NPSN
+    # DEDUP BY NPSN
     # ==================================================
     df = (
         df.sort_values("Priority")
@@ -128,66 +128,40 @@ if sheet_url:
     # ==================================================
     # METRICS
     # ==================================================
-    total_data = len(df)
-    total_selesai = (df.Status_Category == "Selesai").sum()
-    total_belum = (df.Status_Category == "Belum Dikerjakan").sum()
+    total = len(df)
+    selesai = (df.Status_Category == "Selesai").sum()
+    belum = total - selesai
 
-    st.title("📊 Dashboard Monitoring Instalasi IFP")
+    st.title("📊 Dashboard Monitoring Instalasi IFP (Multi GID)")
 
-    col1, col2, col3 = st.columns(3)
+    c1, c2, c3 = st.columns(3)
+    c1.metric("📄 TOTAL DATA", total)
+    c2.metric("⏳ BELUM DIKERJAKAN", belum)
+    c3.metric("✅ SELESAI", selesai)
 
-    with col1:
-        st.metric("📄 TOTAL DATA", total_data)
-
-    with col2:
-        st.metric(
-            "⏳ BELUM DIKERJAKAN",
-            total_belum,
-            f"{(total_belum / total_data * 100):.1f}%" if total_data else "0%"
-        )
-
-    with col3:
-        st.metric(
-            "✅ SELESAI",
-            total_selesai,
-            f"{(total_selesai / total_data * 100):.1f}%" if total_data else "0%"
-        )
+    if total > 0:
+        st.progress(selesai / total)
+        st.caption(f"{selesai} dari {total} sekolah selesai")
 
     # ==================================================
-    # PROGRESS BAR
-    # ==================================================
-    if total_data > 0:
-        st.subheader("📈 Progress Pengerjaan")
-        st.progress(total_selesai / total_data)
-        st.caption(f"{total_selesai} dari {total_data} sekolah selesai")
-
-    # ==================================================
-    # TABLE VIEW
+    # TABLE
     # ==================================================
     st.subheader("📋 Data Detail")
 
-    def render_status(val):
-        color = get_status_color(val)
-        emoji = get_status_emoji(val)
-        return f"<span style='color:{color}; font-weight:600'>{emoji} {val}</span>"
+    def render_status(s):
+        return "✅ Selesai" if s == "Selesai" else "⏳ Belum Dikerjakan"
 
-    df_display = df.copy()
-    df_display["Status"] = df_display["Status_Category"].apply(render_status)
+    df_show = df.copy()
+    df_show.insert(0, "Status", df_show["Status_Category"].apply(render_status))
 
-    show_cols = [c for c in df_display.columns if c not in ["Priority", "Status_Text", "Status_Category"]]
-    show_cols.insert(0, "Status")
+    hide_cols = ["Status_Text", "Status_Category", "Priority"]
+    show_cols = [c for c in df_show.columns if c not in hide_cols]
 
-    st.write(
-        df_display[show_cols].to_html(escape=False, index=False),
-        unsafe_allow_html=True
-    )
+    st.dataframe(df_show[show_cols], use_container_width=True)
 
-    # ==================================================
-    # FOOTER
-    # ==================================================
     st.caption(
-        f"🕒 Terakhir update: {datetime.now().strftime('%d %b %Y %H:%M:%S')}"
+        f"🕒 Update: {datetime.now().strftime('%d %b %Y %H:%M:%S')}"
     )
 
 else:
-    st.info("⬅️ Masukkan URL Google Sheet untuk memulai")
+    st.info("⬅️ Masukkan URL Google Sheet & daftar GID")
