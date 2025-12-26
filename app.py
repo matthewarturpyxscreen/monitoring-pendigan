@@ -2,129 +2,192 @@ import streamlit as st
 import pandas as pd
 import requests
 from io import BytesIO
+from datetime import datetime
 
-# =====================================
-# CONFIG DASHBOARD (MULTI LINK)
-# =====================================
-DASHBOARDS = {
-    "📊 Batch 1 - Papua": {
-        "sheet_url": "PASTE_GOOGLE_SHEET_URL_1",
-        "sheet_name": "INSTALASI IFP 2025 BATCH 1"
-    },
-    "📊 Batch 2 - Jawa Timur": {
-        "sheet_url": "PASTE_GOOGLE_SHEET_URL_2",
-        "sheet_name": "Sheet1"
-    },
-    "📊 Batch 3 - Nasional": {
-        "sheet_url": "PASTE_GOOGLE_SHEET_URL_3",
-        "sheet_name": "Sheet1"
-    }
-}
-
+# ======================================================
+# CONFIG
+# ======================================================
 st.set_page_config(
-    page_title="Monitoring Instalasi IFP",
-    layout="wide"
+    page_title="Dashboard Monitoring Instalasi IFP",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# =====================================
-# UTIL FUNCTIONS
-# =====================================
-def load_gsheet(url, sheet_name):
-    export_url = url.replace("/edit", "/export") + f"?format=xlsx&sheet={sheet_name}"
-    r = requests.get(export_url)
-    return pd.read_excel(BytesIO(r.content))
+st.cache_data.clear()
 
+# ======================================================
+# HELPER FUNCTIONS
+# ======================================================
 def normalize_status(val):
-    if pd.isna(val):
+    """
+    NORMALISASI KE 2 STATUS SAJA
+    """
+    if pd.isna(val) or str(val).strip() == "":
         return "Belum Dikerjakan"
+
     val = str(val).upper()
-    return "Selesai" if "SELESAI" in val else "Belum Dikerjakan"
+    if "SELESAI" in val:
+        return "Selesai"
+    return "Belum Dikerjakan"
 
-def status_color(status):
-    return "🟩 Selesai" if status == "Selesai" else "⬜ Belum Dikerjakan"
 
-# =====================================
+def get_status_priority(status):
+    """
+    PRIORITAS UNTUK DEDUP
+    """
+    priority = {
+        "Selesai": 1,
+        "Belum Dikerjakan": 2
+    }
+    return priority.get(status, 99)
+
+
+def get_status_color(status):
+    return "#10b981" if status == "Selesai" else "#94a3b8"
+
+
+def get_status_emoji(status):
+    return "✅" if status == "Selesai" else "⏳"
+
+
+def load_google_sheet(sheet_url):
+    """
+    LOAD GOOGLE SHEET KE DATAFRAME
+    """
+    if "docs.google.com" not in sheet_url:
+        st.error("URL Google Sheet tidak valid")
+        return None
+
+    csv_url = sheet_url.replace("/edit", "/export?format=csv")
+    response = requests.get(csv_url)
+
+    if response.status_code != 200:
+        st.error("Gagal mengambil data dari Google Sheet")
+        return None
+
+    return pd.read_csv(BytesIO(response.content))
+
+
+# ======================================================
 # SIDEBAR
-# =====================================
-st.sidebar.title("📌 Pilih Dashboard")
+# ======================================================
+st.sidebar.title("⚙️ Pengaturan")
 
-dashboard_name = st.sidebar.selectbox(
-    "Dashboard",
-    list(DASHBOARDS.keys())
+sheet_url = st.sidebar.text_input(
+    "🔗 Google Sheet URL",
+    placeholder="https://docs.google.com/spreadsheets/..."
 )
 
 status_filter = st.sidebar.selectbox(
-    "Filter Status",
+    "📊 Filter Status",
     ["Semua Status", "Belum Dikerjakan", "Selesai"]
 )
 
-# =====================================
+refresh = st.sidebar.button("🔄 Refresh Data")
+
+# ======================================================
 # LOAD DATA
-# =====================================
-cfg = DASHBOARDS[dashboard_name]
-df = load_gsheet(cfg["sheet_url"], cfg["sheet_name"])
+# ======================================================
+if sheet_url:
+    with st.spinner("⏳ Mengambil data..."):
+        df = load_google_sheet(sheet_url)
 
-# Normalisasi kolom
-df.columns = [c.strip() for c in df.columns]
+    if df is None or df.empty:
+        st.stop()
 
-df["Status_Category"] = df["Status_Text"].apply(normalize_status)
+    # ==================================================
+    # VALIDASI KOLOM WAJIB
+    # ==================================================
+    required_cols = ["NPSN", "Status_Text"]
+    for col in required_cols:
+        if col not in df.columns:
+            st.error(f"Kolom wajib tidak ditemukan: {col}")
+            st.stop()
 
-# =====================================
-# FILTER
-# =====================================
-if status_filter != "Semua Status":
-    df = df[df["Status_Category"] == status_filter]
+    # ==================================================
+    # NORMALISASI STATUS
+    # ==================================================
+    df["Status_Category"] = df["Status_Text"].apply(normalize_status)
+    df["Priority"] = df["Status_Category"].apply(get_status_priority)
 
-# =====================================
-# METRICS
-# =====================================
-total = len(df)
-selesai = (df.Status_Category == "Selesai").sum()
-belum = total - selesai
+    # ==================================================
+    # DEDUP BERDASARKAN NPSN
+    # ==================================================
+    df = (
+        df.sort_values("Priority")
+          .drop_duplicates(subset="NPSN", keep="first")
+          .reset_index(drop=True)
+    )
 
-st.title(dashboard_name)
+    # ==================================================
+    # FILTER STATUS
+    # ==================================================
+    if status_filter != "Semua Status":
+        df = df[df["Status_Category"] == status_filter]
 
-col1, col2, col3 = st.columns(3)
+    # ==================================================
+    # METRICS
+    # ==================================================
+    total_data = len(df)
+    total_selesai = (df.Status_Category == "Selesai").sum()
+    total_belum = (df.Status_Category == "Belum Dikerjakan").sum()
 
-with col1:
-    st.metric("📋 Total Data", total)
+    st.title("📊 Dashboard Monitoring Instalasi IFP")
 
-with col2:
-    st.metric("⬜ Belum Dikerjakan", belum)
+    col1, col2, col3 = st.columns(3)
 
-with col3:
-    st.metric("🟩 Selesai", selesai)
+    with col1:
+        st.metric("📄 TOTAL DATA", total_data)
 
-# =====================================
-# PROGRESS
-# =====================================
-if total > 0:
-    st.progress(selesai / total)
-    st.caption(f"Progress: {selesai}/{total} ({(selesai/total)*100:.1f}%)")
+    with col2:
+        st.metric(
+            "⏳ BELUM DIKERJAKAN",
+            total_belum,
+            f"{(total_belum / total_data * 100):.1f}%" if total_data else "0%"
+        )
 
-# =====================================
-# TABLE
-# =====================================
-display_cols = [
-    "NPSN", "Provinsi", "Kabupaten", "Nama",
-    "Teknisi", "Status_Category"
-]
+    with col3:
+        st.metric(
+            "✅ SELESAI",
+            total_selesai,
+            f"{(total_selesai / total_data * 100):.1f}%" if total_data else "0%"
+        )
 
-display_cols = [c for c in display_cols if c in df.columns]
+    # ==================================================
+    # PROGRESS BAR
+    # ==================================================
+    if total_data > 0:
+        st.subheader("📈 Progress Pengerjaan")
+        st.progress(total_selesai / total_data)
+        st.caption(f"{total_selesai} dari {total_data} sekolah selesai")
 
-df_display = df[display_cols].copy()
-df_display["Status"] = df_display["Status_Category"].apply(status_color)
+    # ==================================================
+    # TABLE VIEW
+    # ==================================================
+    st.subheader("📋 Data Detail")
 
-st.dataframe(
-    df_display.drop(columns=["Status_Category"]),
-    use_container_width=True
-)
+    def render_status(val):
+        color = get_status_color(val)
+        emoji = get_status_emoji(val)
+        return f"<span style='color:{color}; font-weight:600'>{emoji} {val}</span>"
 
-# =====================================
-# DOWNLOAD
-# =====================================
-st.download_button(
-    "⬇️ Download Excel",
-    data=df.to_excel(index=False),
-    file_name=f"{dashboard_name}.xlsx"
-)
+    df_display = df.copy()
+    df_display["Status"] = df_display["Status_Category"].apply(render_status)
+
+    show_cols = [c for c in df_display.columns if c not in ["Priority", "Status_Text", "Status_Category"]]
+    show_cols.insert(0, "Status")
+
+    st.write(
+        df_display[show_cols].to_html(escape=False, index=False),
+        unsafe_allow_html=True
+    )
+
+    # ==================================================
+    # FOOTER
+    # ==================================================
+    st.caption(
+        f"🕒 Terakhir update: {datetime.now().strftime('%d %b %Y %H:%M:%S')}"
+    )
+
+else:
+    st.info("⬅️ Masukkan URL Google Sheet untuk memulai")
