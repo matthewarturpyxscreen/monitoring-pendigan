@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import requests
+import re
 from io import BytesIO
 from datetime import datetime
 
@@ -18,6 +19,27 @@ st.cache_data.clear()
 # ======================================================
 # HELPER FUNCTIONS
 # ======================================================
+def parse_gsheet_url(url):
+    """
+    Terima SEMUA format link Google Sheets,
+    kembalikan base_url dan gid
+    """
+    if not url:
+        return None, None
+
+    file_id_match = re.search(r"/d/([a-zA-Z0-9-_]+)", url)
+    if not file_id_match:
+        return None, None
+
+    file_id = file_id_match.group(1)
+    base_url = f"https://docs.google.com/spreadsheets/d/{file_id}"
+
+    gid_match = re.search(r"gid=([0-9]+)", url)
+    gid = gid_match.group(1) if gid_match else "0"
+
+    return base_url, gid
+
+
 def normalize_status(val):
     if pd.isna(val):
         return "Belum Dikerjakan"
@@ -53,7 +75,7 @@ def get_status_priority(status):
 @st.cache_data(ttl=300)
 def load_sheet_by_gid(base_url, gid):
     """
-    Load satu sheet Google Spreadsheet berdasarkan GID (CSV Export)
+    Load 1 sheet Google Spreadsheet via CSV export
     """
     try:
         csv_url = f"{base_url}/export?format=csv&gid={gid}"
@@ -75,14 +97,9 @@ def load_sheet_by_gid(base_url, gid):
 # ======================================================
 st.sidebar.title("⚙️ Pengaturan")
 
-base_url = st.sidebar.text_input(
-    "🔗 Google Sheet URL (tanpa /edit)",
-    placeholder="https://docs.google.com/spreadsheets/d/FILE_ID"
-)
-
-gid_input = st.sidebar.text_input(
-    "📄 Daftar GID (pisahkan koma)",
-    placeholder="0,123456789"
+gsheet_url = st.sidebar.text_input(
+    "🔗 Google Sheets Link",
+    placeholder="Paste link Google Sheets di sini"
 )
 
 status_filter = st.sidebar.selectbox(
@@ -101,25 +118,16 @@ status_filter = st.sidebar.selectbox(
 # ======================================================
 # LOAD & PROCESS DATA
 # ======================================================
-if base_url and gid_input:
-    gids = [g.strip() for g in gid_input.split(",") if g.strip().isdigit()]
+base_url, gid = parse_gsheet_url(gsheet_url)
 
-    if not gids:
-        st.error("❌ GID tidak valid")
-        st.stop()
+if base_url and gid:
 
     with st.spinner("⏳ Mengambil data dari Google Sheets..."):
-        df_list = []
-        for gid in gids:
-            part = load_sheet_by_gid(base_url, gid)
-            if part is not None and not part.empty:
-                df_list.append(part)
+        df = load_sheet_by_gid(base_url, gid)
 
-    if not df_list:
-        st.error("❌ Tidak ada data yang berhasil dimuat")
+    if df is None or df.empty:
+        st.error("❌ Data tidak bisa diakses. Pastikan sheet PUBLIC (Anyone with link → Viewer).")
         st.stop()
-
-    df = pd.concat(df_list, ignore_index=True)
 
     # ==================================================
     # VALIDASI KOLOM WAJIB
@@ -137,7 +145,7 @@ if base_url and gid_input:
     df["Priority"] = df["Status_Category"].apply(get_status_priority)
 
     # ==================================================
-    # DEDUP BY NPSN (STATUS TERBAIK)
+    # DEDUP BY NPSN (AMBIL STATUS TERBAIK)
     # ==================================================
     df = (
         df.sort_values("Priority")
@@ -202,4 +210,4 @@ if base_url and gid_input:
     )
 
 else:
-    st.info("⬅️ Masukkan URL Google Sheet & GID untuk mulai")
+    st.info("⬅️ Paste link Google Sheets untuk mulai")
